@@ -21,6 +21,7 @@ import { formatDateTime, timeAgo } from '../lib/time'
 import { checkFailureMessage, isStalePending } from '../lib/autoCheck'
 import { CopyButton, EmptyState, ErrorText, MaskedNumber, MaskedPin, MerchantDot, MoneyInput, Page, Sheet, Splash } from '../components/ui'
 import { copyText } from '../lib/clipboard'
+import { BalanceCheckPanel } from '../components/BalanceCheckPanel'
 
 type Action = 'spend' | 'load' | 'set'
 
@@ -33,7 +34,7 @@ export function CardDetail() {
   const members = useMembers()
   const online = useOnline()
   const [action, setAction] = useState<Action | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [checking, setChecking] = useState(false)
 
   if (card.isPending) return <Splash />
   if (!card.data) {
@@ -49,9 +50,9 @@ export function CardDetail() {
 
   function checkBalance() {
     if (!merchant?.balance_check_url) return
-    // Both calls happen synchronously inside the tap, which iOS requires for clipboard and pop-ups.
-    void copyText(c.card_number.replace(/\s+/g, '')).then(setCopied)
-    window.open(merchant.balance_check_url, '_blank', 'noopener,noreferrer')
+    // Copy inside the tap (iOS requires it) so the number is ready to paste on the page.
+    void copyText(c.card_number.replace(/\s+/g, ''))
+    setChecking(true)
   }
 
   return (
@@ -119,10 +120,23 @@ export function CardDetail() {
 
       {merchant?.balance_check_url && (
         <button type="button" className="btn-secondary mb-1 w-full" onClick={checkBalance}>
-          Check balance ↗
+          Check balance
         </button>
       )}
-      {copied && <p className="mb-2 text-center text-xs text-slate-500">Card number copied. Paste it on the balance page, then come back and tap Copy next to the PIN.</p>}
+
+      {checking && merchant?.balance_check_url && (
+        <BalanceCheckPanel
+          merchantName={merchant.name}
+          url={merchant.balance_check_url}
+          cardNumber={c.card_number}
+          pin={c.pin}
+          onClose={() => setChecking(false)}
+          onSetBalance={() => {
+            setChecking(false)
+            setAction('set')
+          }}
+        />
+      )}
 
       {merchant?.auto_check && <AutoCheck card={c} />}
 

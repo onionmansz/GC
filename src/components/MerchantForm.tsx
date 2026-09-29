@@ -84,7 +84,7 @@ export function MerchantForm({
       <Field label="Colour">
         {(id) => <input id={id} type="color" className="h-12 w-20 rounded-lg border border-slate-300" value={color} onChange={(e) => setColor(e.target.value)} />}
       </Field>
-      <Field label="Balance check page (optional)" hint="Used by “Check balance”: copies the card number and opens this page.">
+      <Field label="Balance check page (optional)" hint="Used by “Check balance”: opens this page inside the app, with Copy buttons for the number and PIN.">
         {(id) => (
           <input
             id={id}

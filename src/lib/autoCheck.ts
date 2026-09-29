@@ -15,7 +15,7 @@ export type CheckStatus = 'pending' | 'running' | 'done' | 'failed'
 
 /** Friendly text for the worker's error codes (worker/src/errors.ts). */
 const FAILURES: Record<string, string> = {
-  captcha: 'The merchant asked for a CAPTCHA, so it couldn’t check automatically. Use “Check balance ↗” instead.',
+  captcha: 'The merchant asked for a CAPTCHA, so it couldn’t check automatically. Use “Check balance” to check it yourself.',
   invalid_card: 'The merchant didn’t accept this card number or PIN. Check both on the card.',
   missing_pin: 'This merchant needs the card’s PIN. Add it with Edit, then try again.',
   relink_needed:
