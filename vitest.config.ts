@@ -16,6 +16,8 @@ export default defineConfig({
           name: 'db',
           include: ['supabase/tests/db/**/*.test.ts'],
           environment: 'node',
+          // Files share cluster-wide roles; run them one at a time.
+          fileParallelism: false,
           testTimeout: 30_000,
           hookTimeout: 60_000,
         },
