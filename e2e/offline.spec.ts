@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
+import { signInFresh } from './helpers'
 
 const url = process.env.SUPABASE_TEST_URL
 const anonKey = process.env.SUPABASE_TEST_ANON_KEY
@@ -16,9 +17,6 @@ const email = `e2e-offline-${randomUUID().slice(0, 8)}@example.com`
 
 test.beforeAll(async () => {
   admin = createClient(url!, serviceKey!, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true })
-  if (error) throw error
-  userId = data.user.id
 })
 
 test.afterAll(async () => {
@@ -30,13 +28,7 @@ test.afterAll(async () => {
 })
 
 test('cold start offline shows last-synced cards read-only, and till mode still works', async ({ page, context }) => {
-  const link = await admin.auth.admin.generateLink({ type: 'magiclink', email })
-  if (link.error) throw link.error
-  await page.goto(`/auth/confirm?token_hash=${link.data.properties.hashed_token}&type=magiclink`)
-  await page.getByLabel('Your name').fill('Offline')
-  await page.getByRole('button', { name: 'Create a new household' }).click()
-  await page.getByRole('button', { name: 'Create household' }).click()
-  await expect(page.getByTestId('grand-total')).toHaveText('$0.00')
+  userId = await signInFresh(page, admin, email)
 
   await page.goto('/cards/new')
   await page.getByLabel('Merchant').selectOption({ label: 'Esso' })

@@ -1,0 +1,23 @@
+# Home server:
+#   cp .env.example .env            (fill it in)
+#   docker compose build
+#   docker compose run --rm balance-worker npm run link-indigo     (one-time Indigo sign-in)
+#   docker compose up -d
+services:
+  balance-worker:
+    build: .
+    container_name: giftcard-balance-worker
+    restart: unless-stopped
+    env_file: .env
+    # Chromium needs a larger /dev/shm than Docker's 64 MB default.
+    shm_size: 512mb
+    volumes:
+      # Saved Indigo sign-in. Treat like a password: it lets its holder use your Indigo account.
+      - indigo-state:/app/state
+    # No ports: the worker only makes outgoing connections.
+    logging:
+      driver: json-file
+      options: { max-size: '5m', max-file: '3' }
+
+volumes:
+  indigo-state:

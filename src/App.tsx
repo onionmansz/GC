@@ -12,6 +12,7 @@ import { TillMode } from './routes/TillMode'
 import { EditCard, NewCard } from './routes/CardForm'
 import { Archived } from './routes/Archived'
 import { Settings } from './routes/Settings'
+import { SetPassword } from './routes/SetPassword'
 
 export function App() {
   return (
@@ -30,6 +31,7 @@ function Gate() {
 
   if (auth.status === 'loading') return <Splash />
   if (auth.status === 'signedOut') return <Login />
+  if (auth.needsPassword) return <SetPassword reason={auth.needsPassword} />
   if (household.isPending) return <Splash />
   if (household.isError && !household.data) {
     return <Splash text="Couldn't reach the server. Check your connection and reopen the app." />
@@ -46,6 +48,7 @@ function Gate() {
       <Route path="/cards/new" element={<NewCard />} />
       <Route path="/archived" element={<Archived />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/set-password" element={<SetPassword reason="change" />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

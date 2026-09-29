@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   useCard,
   useDeleteCard,
+  useLatestBalanceCheck,
+  useRequestBalanceCheck,
   useMembers,
   useMerchants,
   useRecordTransaction,
@@ -16,6 +18,7 @@ import { adjustDelta, checkLoad, checkSpend } from '../lib/ledger'
 import { userMessage } from '../lib/errors'
 import { useOnline } from '../lib/queryClient'
 import { formatDateTime, timeAgo } from '../lib/time'
+import { checkFailureMessage, isStalePending } from '../lib/autoCheck'
 import { EmptyState, ErrorText, MaskedNumber, MaskedPin, MerchantDot, MoneyInput, Page, Sheet, Splash } from '../components/ui'
 
 type Action = 'spend' | 'load' | 'set'
@@ -121,6 +124,8 @@ export function CardDetail() {
       )}
       {copied && <p className="mb-2 text-center text-xs text-slate-500">Card number copied. Paste it on the balance page.</p>}
 
+      {merchant?.auto_check && <AutoCheck card={c} />}
+
       <Ledger card={c} />
 
       <ArchiveControls card={c} />
@@ -129,6 +134,46 @@ export function CardDetail() {
         <AmountSheet action={action} card={c} merchant={merchant} onClose={() => setAction(null)} />
       )}
     </Page>
+  )
+}
+
+function AutoCheck({ card }: { card: CardWithBalance }) {
+  const online = useOnline()
+  const latest = useLatestBalanceCheck(card.id, true)
+  const request = useRequestBalanceCheck()
+  const check = latest.data
+  const active = check?.status === 'pending' || check?.status === 'running'
+
+  let status: React.ReactNode = null
+  if (request.error) status = <span className="text-red-700">{userMessage(request.error, 'request-check')}</span>
+  else if (check && active) {
+    status = isStalePending(check.status, check.created_at)
+      ? "Still waiting. The checker on your home server doesn't seem to be running."
+      : check.status === 'running'
+        ? 'Checking with the merchant…'
+        : 'Queued…'
+  } else if (check?.status === 'done' && check.result_cents !== null && check.finished_at) {
+    status = `Auto-checked ${timeAgo(check.finished_at)}: ${formatCents(check.result_cents)}`
+  } else if (check?.status === 'failed') {
+    status = <span className="text-amber-800">{checkFailureMessage(check.error_code)}</span>
+  }
+
+  return (
+    <div className="mb-1" data-testid="auto-check">
+      <button
+        type="button"
+        className="btn-secondary w-full"
+        disabled={!online || active || request.isPending}
+        onClick={() => request.mutate(card.id)}
+      >
+        {active ? 'Checking balance…' : 'Check balance now (automatic)'}
+      </button>
+      {status && (
+        <p className="mt-1 text-center text-xs text-slate-600" role="status" data-testid="auto-check-status">
+          {status}
+        </p>
+      )}
+    </div>
   )
 }
 

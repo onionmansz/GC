@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import {
   useCreateInvite,
   useDeleteInvite,
@@ -32,12 +33,19 @@ export function Settings() {
           {household.data && <DisplayNameForm current={household.data.me.display_name} />}
         </Section>
 
+        <Section title="Password">
+          <Link to="/set-password" className="btn-secondary w-full" aria-disabled={!online}>
+            Change password
+          </Link>
+        </Section>
+
         <Section title="Household">
           {household.data && <HouseholdNameForm id={household.data.household.id} current={household.data.household.name} />}
           <ul className="card mt-4 divide-y divide-slate-100">
             {members.data?.map((m) => (
               <li key={m.user_id} className="px-4 py-3">
                 {m.display_name}
+                {m.is_service && <span className="ml-2 text-xs text-slate-500">automatic checker</span>}
               </li>
             ))}
           </ul>
@@ -59,6 +67,7 @@ export function Settings() {
                     <span className="block font-medium">{m.name}</span>
                     <span className="text-xs text-slate-500">
                       {m.category} · {m.balance_check_url ? 'balance page set' : 'no balance page'}
+                      {m.auto_check ? ' · auto-check on' : ''}
                     </span>
                   </span>
                   <span className="text-slate-300">›</span>

@@ -12,6 +12,7 @@ const MESSAGES: Record<string, string> = {
   not_authenticated: 'Please sign in again.',
   cards_unique_number: 'That card number is already saved for this merchant.',
   merchants_household_name: 'A merchant with that name already exists.',
+  not_supported: 'Automatic checks aren\u2019t set up for this merchant.',
   in_use: 'This merchant still has cards. Move or delete them first.',
   offline: "You're offline. Changes need a connection.",
 }

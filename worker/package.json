@@ -1,0 +1,26 @@
+{
+  "name": "giftcard-balance-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Runs automated gift card balance checks for the household wallet.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "link-indigo": "tsx src/link-indigo.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "playwright": "1.63.0",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  }
+}

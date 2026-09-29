@@ -9,6 +9,7 @@ const m = (name: string, category: string, total: number, count = 1): MerchantSu
   category,
   color: '#000000',
   balance_check_url: null,
+  auto_check: null,
   active_card_count: count,
   total_balance_cents: total,
 })

@@ -4,6 +4,7 @@ import type { MerchantSummary } from '../api/types'
 import { userMessage } from '../lib/errors'
 import { useOnline } from '../lib/queryClient'
 import { ErrorText, Field } from './ui'
+import { AUTO_CHECK_PROVIDERS, isAutoCheckProvider, type AutoCheckProvider } from '../lib/autoCheck'
 
 export const CATEGORY_SUGGESTIONS = ['Books', 'Coffee', 'Gas', 'Groceries', 'Restaurants', 'Retail', 'Entertainment', 'Other']
 
@@ -23,6 +24,7 @@ export function MerchantForm({
   const [category, setCategory] = useState(merchant?.category ?? '')
   const [color, setColor] = useState(merchant?.color ?? '#64748b')
   const [url, setUrl] = useState(merchant?.balance_check_url ?? '')
+  const [autoCheck, setAutoCheck] = useState<AutoCheckProvider | ''>(merchant?.auto_check ?? '')
   const [urlError, setUrlError] = useState('')
 
   const pending = create.isPending || update.isPending || remove.isPending
@@ -36,7 +38,7 @@ export function MerchantForm({
       return
     }
     setUrlError('')
-    const input = { name, category, color, balanceCheckUrl: trimmed }
+    const input = { name, category, color, balanceCheckUrl: trimmed, autoCheck: autoCheck || null }
     try {
       if (merchant) {
         await update.mutateAsync({ id: merchant.merchant_id, ...input })
@@ -93,6 +95,26 @@ export function MerchantForm({
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
+        )}
+      </Field>
+      <Field
+        label="Automatic balance check"
+        hint="Adds a “Check now” button to this merchant’s cards. Needs the checker running on your server (see README)."
+      >
+        {(id) => (
+          <select
+            id={id}
+            className="input"
+            value={autoCheck}
+            onChange={(e) => setAutoCheck(isAutoCheckProvider(e.target.value) ? e.target.value : '')}
+          >
+            <option value="">Off</option>
+            {Object.entries(AUTO_CHECK_PROVIDERS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         )}
       </Field>
       <ErrorText>{urlError || (error ? userMessage(error, 'merchant') : null)}</ErrorText>

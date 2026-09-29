@@ -287,7 +287,7 @@ function CardForm({ card }: { card?: CardWithBalance }) {
           {(id) => (
             <select id={id} className="input" value={heldBy} onChange={(e) => setHeldBy(e.target.value)}>
               <option value="">Nobody in particular</option>
-              {members.data?.map((m) => (
+              {members.data?.filter((m) => !m.is_service).map((m) => (
                 <option key={m.user_id} value={m.user_id}>
                   {m.display_name}
                 </option>
