@@ -18,7 +18,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['e2e/**', 'scripts/**', 'supabase/tests/**'],
+    files: ['e2e/**', 'scripts/**', 'supabase/tests/**', 'worker/**'],
     rules: { 'no-console': 'off' },
   },
 )

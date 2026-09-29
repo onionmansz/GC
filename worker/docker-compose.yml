@@ -1,0 +1,13 @@
+# Example for a home server:  cp .env.example .env  (fill it in)  &&  docker compose up -d --build
+services:
+  balance-worker:
+    build: .
+    container_name: giftcard-balance-worker
+    restart: unless-stopped
+    env_file: .env
+    # Chromium needs a larger /dev/shm than Docker's 64 MB default.
+    shm_size: 512mb
+    # No ports: the worker only makes outgoing connections.
+    logging:
+      driver: json-file
+      options: { max-size: '5m', max-file: '3' }

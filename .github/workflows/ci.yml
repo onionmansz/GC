@@ -23,6 +23,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            worker/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
@@ -31,6 +34,9 @@ jobs:
         run: npm run test:db
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      - name: Worker (typecheck + tests)
+        working-directory: worker
+        run: npm ci && npm run typecheck && npm test
       - name: Build
         run: npm run build
         env:
