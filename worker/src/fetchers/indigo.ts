@@ -1,7 +1,7 @@
 import { chmod, mkdir, rename, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { chromium, type Browser, type BrowserContext, type Frame, type Locator, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Frame, type Locator, type Page, type Request, type Response as PwResponse } from 'playwright'
 import { CheckError } from '../errors'
 import { parseAmountToCents } from '../money'
 import type { BalanceFetcher } from './types'
@@ -41,8 +41,20 @@ export async function launchBrowser(headless = true): Promise<Browser> {
   return chromium.launch({ headless, executablePath: process.env.CHROMIUM_PATH || undefined })
 }
 
+/**
+ * Headless Chromium identifies itself as "HeadlessChrome", and Indigo's balance service
+ * refuses such requests (410 without CORS headers, so the browser reports ERR_FAILED and
+ * the page shows "Failed to get gift card balance"). Identify as the regular desktop
+ * Chrome it is, same version.
+ */
+export function desktopUserAgent(browser: Browser): string {
+  const major = browser.version().split('.')[0] || '141'
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`
+}
+
 export async function newIndigoContext(browser: Browser, sessionFile: string | null): Promise<BrowserContext> {
   return browser.newContext({
+    userAgent: desktopUserAgent(browser),
     storageState: sessionFile && existsSync(sessionFile) ? sessionFile : undefined,
     locale: 'en-CA',
     timezoneId: 'America/Toronto',
@@ -104,11 +116,35 @@ export async function waitForFormOrLogin(page: Page, timeoutMs = FORM_TIMEOUT_MS
   throw new CheckError('site_changed')
 }
 
-/** Resolves with Indigo's balance service reply (from any page, frame or worker). */
-export function waitForBalanceReply(context: BrowserContext, timeoutMs = 45_000) {
-  return context.waitForEvent('response', {
-    predicate: (r) => r.url().startsWith(INDIGO_BALANCE_API) && r.request().method() === 'POST',
-    timeout: timeoutMs,
+/**
+ * Resolves with Indigo's balance service reply (from any page, frame or worker).
+ * Rejects with CheckError('blocked') as soon as the browser reports the request failed
+ * (e.g. refused by the service), instead of waiting out the timeout.
+ */
+export function waitForBalanceReply(context: BrowserContext, timeoutMs = 45_000): Promise<PwResponse> {
+  const isBalance = (r: Request) => r.url().startsWith(INDIGO_BALANCE_API) && r.method() === 'POST'
+  return new Promise<PwResponse>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer)
+      context.off('response', onResponse)
+      context.off('requestfailed', onFailed)
+    }
+    const onResponse = (r: PwResponse) => {
+      if (!isBalance(r.request())) return
+      cleanup()
+      resolve(r)
+    }
+    const onFailed = (r: Request) => {
+      if (!isBalance(r)) return
+      cleanup()
+      reject(new CheckError('blocked'))
+    }
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new CheckError('site_changed'))
+    }, timeoutMs)
+    context.on('response', onResponse)
+    context.on('requestfailed', onFailed)
   })
 }
 
@@ -214,9 +250,10 @@ export const indigoFetcher: BalanceFetcher = {
       const reply = waitForBalanceReply(context)
       await submitBalanceForm(page, form, card.cardNumber, card.pin)
       note(`submitted ${secs()}`)
-      const res = await reply.catch(() => {
-        note(`no balance reply after ${secs()}`)
-        throw new CheckError('site_changed')
+      const res = await reply.catch((err: unknown) => {
+        const code = err instanceof CheckError ? err.code : 'site_changed'
+        note(code === 'blocked' ? `balance request refused ${secs()}` : `no balance reply after ${secs()}`)
+        throw err instanceof CheckError ? err : new CheckError('site_changed')
       })
       note(`reply ${res.status()} ${secs()}`)
       const cents = interpretBalanceResponse(res.status(), await res.text())

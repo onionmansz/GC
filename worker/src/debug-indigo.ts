@@ -124,7 +124,7 @@ async function main() {
         const clickedAt = Date.now()
         const reply = waitForBalanceReply(context, 30_000).then(
           async (res) => ({ status: res.status(), body: (await res.text()).slice(0, 200), afterSeconds: (Date.now() - clickedAt) / 1000 }),
-          () => null,
+          (err: unknown) => (err instanceof Error && err.message === 'blocked' ? 'request refused/failed' : null),
         )
         await submitBalanceForm(page, form, '0000000000000000000', '0000')
         const balanceReply = await reply
