@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadStateDir } from './config'
-import { INDIGO_BALANCE_PAGE, indigoSessionFile, isLoginUrl, launchBrowser, newIndigoContext } from './fetchers/indigo'
+import { INDIGO_BALANCE_PAGE, indigoSessionFile, isLoginUrl, launchBrowser, newIndigoContext, trimPageLoad, waitForFormOrLogin } from './fetchers/indigo'
 
 // Diagnose "site_changed": open Indigo's balance page exactly like a check does (saved
-// sign-in, headless), wait, then report what's on screen. Types nothing, so no card data
+// sign-in, headless, same trimmed loading), time how long the form takes to appear,
+// then report what's on screen. Types nothing, so no card data
 // is involved. Prints a summary and saves a screenshot next to the saved sign-in.
 //
 //   docker compose run --rm balance-worker npm run debug-indigo
@@ -36,7 +37,6 @@ const SCAN_FIELDS = `(() => {
   return out
 })()`
 
-const WAIT_MS = Number(process.env.DEBUG_WAIT_SECONDS ?? 25) * 1000
 
 interface FieldInfo {
   tag: string
@@ -60,11 +60,16 @@ async function main() {
   const browser = await launchBrowser()
   try {
     const context = await newIndigoContext(browser, sessionFile)
+    await trimPageLoad(context) // same as a real check
     const page = await context.newPage()
     const started = Date.now()
     await page.goto(INDIGO_BALANCE_PAGE, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-    await page.waitForLoadState('networkidle', { timeout: WAIT_MS }).catch(() => {})
-    await page.waitForTimeout(Math.max(0, WAIT_MS - (Date.now() - started)))
+    const pageLoadedSeconds = (Date.now() - started) / 1000
+    const found = await waitForFormOrLogin(page).then(
+      (f) => (f === 'login' ? 'login page' : 'balance form'),
+      () => 'nothing (gave up after 90 s)',
+    )
+    const foundAfterSeconds = (Date.now() - started) / 1000
 
     const frames = []
     for (const frame of page.frames()) {
@@ -93,7 +98,9 @@ async function main() {
           address: `${url.origin}${url.pathname}`,
           redirectedToLogin: isLoginUrl(page.url()),
           title: await page.title(),
-          secondsWaited: Math.round((Date.now() - started) / 1000),
+          pageLoadedSeconds,
+          found,
+          foundAfterSeconds,
           visibleText: bodyText,
           frames,
           screenshot: shot,

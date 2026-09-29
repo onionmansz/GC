@@ -41,12 +41,13 @@ async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<
   }
 }
 
-async function runJob(job: Job, cfg: Config): Promise<{ cents: number } | { error: string }> {
+async function runJob(job: Job, cfg: Config, notes: string[]): Promise<{ cents: number } | { error: string }> {
   const fetcher = getFetcher(job.provider)
   if (!fetcher) return { error: 'not_supported' }
   try {
     return await withTimeout(cfg.checkTimeoutMs, async (signal) => {
-      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { signal, stateDir: cfg.stateDir })
+      const note = (m: string) => notes.push(m)
+      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { signal, stateDir: cfg.stateDir, note })
       if (!Number.isSafeInteger(cents) || cents < 0) throw new CheckError('site_changed')
       return { cents }
     })
@@ -84,14 +85,15 @@ async function main() {
     }
 
     const started = Date.now()
-    const outcome = await runJob(job, cfg)
+    const notes: string[] = []
+    const outcome = await runJob(job, cfg, notes)
     const done = await sb.rpc('complete_balance_check', {
       p_request_id: job.request_id,
       p_balance_cents: 'cents' in outcome ? outcome.cents : null,
       p_error_code: 'error' in outcome ? outcome.error : null,
     })
     const result = 'cents' in outcome ? 'ok' : `failed:${outcome.error}`
-    log(`request ${job.request_id} provider=${job.provider} ${result} in ${Date.now() - started}ms${done.error ? ` (report failed: ${done.error.code})` : ''}`)
+    log(`request ${job.request_id} provider=${job.provider} ${result} in ${Date.now() - started}ms${notes.length ? ` [${notes.join(', ')}]` : ''}${done.error ? ` (report failed: ${done.error.code})` : ''}`)
   }
   log('stopped')
 }

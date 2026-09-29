@@ -18,7 +18,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     email: env.WORKER_EMAIL!,
     password: env.WORKER_PASSWORD!,
     pollIntervalMs: Number(env.POLL_INTERVAL_SECONDS ?? 5) * 1000,
-    checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 60) * 1000,
+    checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 120) * 1000,
     heartbeatFile: env.HEARTBEAT_FILE ?? '/tmp/worker-heartbeat',
     stateDir: loadStateDir(env),
   }

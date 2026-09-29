@@ -187,9 +187,11 @@ docker compose cp indigo-session.json balance-worker:/app/state/indigo-session.j
 If you tap the button and it stays on "Queued…", the app tells you the worker doesn't
 seem to be running.
 
-**If checks fail with "the balance page has changed",** run the diagnostic. It opens Indigo's
-page exactly like a check does but types nothing, prints what it sees (page address, form
-fields), and saves a screenshot:
+**If checks fail with "the balance page has changed",** first check the worker log
+(`docker compose logs`): each check line ends with its steps and timings, e.g.
+`[page 2.1s, form 41.0s, reply 200 43.2s]`. Then run the diagnostic. It opens Indigo's
+page exactly like a check does but types nothing, reports how long the form took to
+appear and what's on the page, and saves a screenshot:
 ```bash
 docker compose run --rm balance-worker npm run debug-indigo
 docker compose cp balance-worker:/app/state/debug-indigo.png .
