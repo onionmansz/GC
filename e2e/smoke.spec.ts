@@ -111,6 +111,23 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   await expect(page.getByRole('dialog', { name: 'Set balance' })).toBeVisible()
   await page.getByRole('button', { name: 'Close' }).click()
 
+  // Merchants whose page won't load inside the app (e.g. 403) can open in the browser instead.
+  await page.getByRole('button', { name: 'Check balance', exact: true }).click()
+  await panel.getByLabel(/Always open Indigo in the browser/).check()
+  await panel.getByRole('button', { name: 'Close' }).click()
+  await page.evaluate(() => {
+    const w = window as unknown as { __opened: string[] }
+    w.__opened = []
+    window.open = (u?: string | URL) => (w.__opened.push(String(u)), null)
+  })
+  await page.getByRole('button', { name: 'Check balance', exact: true }).click()
+  expect(await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened)).toEqual(['https://example.com/balance'])
+  await expect(panel).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open inside the app next time' }).click()
+  await page.getByRole('button', { name: 'Check balance', exact: true }).click()
+  await expect(panel).toBeVisible()
+  await panel.getByRole('button', { name: 'Close' }).click()
+
   await page.getByTestId('show-at-till').click()
   await expect(page.getByTestId('till-mode')).toBeVisible()
   await expect(page.getByTestId('barcode-canvas')).toHaveAttribute('data-rendered', 'true')
