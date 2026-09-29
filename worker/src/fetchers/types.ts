@@ -9,6 +9,8 @@ export interface FetchContext {
   signal: AbortSignal
   /** Directory for per-merchant saved sign-ins (worker/state, a Docker volume). */
   stateDir: string
+  /** Progress notes for the worker log (timings, step names). Never pass card data. */
+  note?: (message: string) => void
 }
 
 /**

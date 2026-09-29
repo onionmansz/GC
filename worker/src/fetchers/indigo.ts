@@ -22,6 +22,8 @@ export const INDIGO_BALANCE_PAGE =
 export const INDIGO_BALANCE_API = process.env.INDIGO_BALANCE_API_URL ?? 'https://indigo-shopify-prd.fly.dev/api/givex/balance'
 
 const STEP_TIMEOUT_MS = 30_000
+/** The balance form can take a while to appear on a cold, headless load. */
+const FORM_TIMEOUT_MS = 90_000
 
 export function indigoSessionFile(stateDir: string): string {
   return join(stateDir, 'indigo-session.json')
@@ -46,6 +48,19 @@ export async function newIndigoContext(browser: Browser, sessionFile: string | n
     locale: 'en-CA',
     timezoneId: 'America/Toronto',
     viewport: { width: 1280, height: 900 },
+  })
+}
+
+/** Resource types and hosts a balance check never needs; skipping them speeds up the page. */
+const SKIPPED_TYPES = new Set(['image', 'media', 'font'])
+const SKIPPED_URL = /\/web-pixels@|google-analytics|googletagmanager|doubleclick|facebook\.net|bat\.bing|monorail-edge|otlp-http/
+
+/** Speed up headless page loads by not fetching images, fonts, video or analytics. */
+export async function trimPageLoad(context: BrowserContext): Promise<void> {
+  await context.route('**/*', (route) => {
+    const req = route.request()
+    if (SKIPPED_TYPES.has(req.resourceType()) || SKIPPED_URL.test(req.url())) return route.abort()
+    return route.continue()
   })
 }
 
@@ -77,7 +92,7 @@ function formIn(frame: Frame | Page): BalanceForm {
  * Wait until either the balance form is on screen (in the page or any frame, since the
  * extension may render in either) or Shopify redirects to sign-in.
  */
-export async function waitForFormOrLogin(page: Page, timeoutMs = STEP_TIMEOUT_MS): Promise<BalanceForm | 'login'> {
+export async function waitForFormOrLogin(page: Page, timeoutMs = FORM_TIMEOUT_MS): Promise<BalanceForm | 'login'> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (isLoginUrl(page.url())) return 'login'
@@ -143,7 +158,7 @@ export function interpretBalanceJson(raw: unknown): number {
 
 export const indigoFetcher: BalanceFetcher = {
   provider: 'indigo',
-  async fetch(card, { signal, stateDir }) {
+  async fetch(card, { signal, stateDir, note = () => {} }) {
     if (!card.pin) throw new CheckError('missing_pin')
     const sessionFile = indigoSessionFile(stateDir)
     if (!existsSync(sessionFile)) throw new CheckError('relink_needed')
@@ -153,11 +168,22 @@ export const indigoFetcher: BalanceFetcher = {
     signal.addEventListener('abort', abort)
     try {
       const context = await newIndigoContext(browser, sessionFile)
+      await trimPageLoad(context)
       const page = await context.newPage()
-      await page.goto(INDIGO_BALANCE_PAGE, { waitUntil: 'domcontentloaded', timeout: STEP_TIMEOUT_MS })
+      const started = Date.now()
+      const secs = () => `${((Date.now() - started) / 1000).toFixed(1)}s`
+      await page.goto(INDIGO_BALANCE_PAGE, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      note(`page ${secs()}`)
 
-      const form = await waitForFormOrLogin(page)
-      if (form === 'login') throw new CheckError('relink_needed')
+      const form = await waitForFormOrLogin(page).catch((err) => {
+        note(`no form after ${secs()}`)
+        throw err
+      })
+      if (form === 'login') {
+        note(`login redirect ${secs()}`)
+        throw new CheckError('relink_needed')
+      }
+      note(`form ${secs()}`)
 
       const reply = context.waitForEvent('response', {
         predicate: (r) => r.url().startsWith(INDIGO_BALANCE_API) && r.request().method() === 'POST',
@@ -167,8 +193,10 @@ export const indigoFetcher: BalanceFetcher = {
       await form.pin.fill(card.pin)
       await form.submit.click()
       const res = await reply.catch(() => {
+        note(`no balance reply after ${secs()}`)
         throw new CheckError('site_changed')
       })
+      note(`reply ${res.status()} ${secs()}`)
       const cents = interpretBalanceResponse(res.status(), await res.text())
 
       // Keep Shopify's refreshed sign-in for next time.
