@@ -34,6 +34,11 @@ function startFixture(): Promise<Server> {
     const url = new URL(req.url ?? '/', 'http://x')
     if (url.pathname === '/balcheck' && req.method === 'GET') {
       res.writeHead(200, { 'content-type': 'text/html' }).end(page(port))
+    } else if (url.pathname === '/refused') {
+      // Like the bot protection cutting the connection for the form's frame.
+      res.writeHead(200, { 'content-type': 'text/html' }).end('<h1>Check Balance</h1><iframe src="/cut"></iframe>')
+    } else if (url.pathname === '/cut') {
+      req.socket.destroy()
     } else if (url.pathname === '/robot') {
       res.writeHead(200, { 'content-type': 'text/html' }).end(ROBOT)
     } else if (url.pathname === '/balcheck' && req.method === 'POST') {
@@ -180,4 +185,18 @@ describe.skipIf(!canRun)('assisted Givex check with the live view', () => {
       givexFetcher('test', () => pageUrl).fetch(GOOD, { signal: new AbortController().signal, stateDir: '/x' }),
     ).rejects.toMatchObject({ code: 'no_viewer' })
   })
+  it('reports a refused balance form as blocked, without handing over', async () => {
+    let handedOver = false
+    const base = pageUrl.replace('/balcheck', '')
+    await expect(
+      givexFetcher('test', () => `${base}/refused`).fetch(GOOD, {
+        signal: new AbortController().signal,
+        stateDir: '/x',
+        handOver: async () => {
+          handedOver = true
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'blocked' })
+    expect(handedOver).toBe(false)
+  }, 60_000)
 })

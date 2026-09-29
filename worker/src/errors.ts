@@ -12,6 +12,7 @@ export type CheckErrorCode =
   | 'missing_pin' // the merchant needs the PIN and the card has none
   | 'no_viewer' // an assisted check needs VIEWER_PUBLIC_URL (the live view) configured
   | 'cancelled' // the person cancelled an assisted check in the live view
+  | 'interrupted' // the worker restarted mid-check (set by release_balance_checks)
   | 'unknown'
 
 export class CheckError extends Error {

@@ -60,6 +60,11 @@ export async function prefillCard(page: Page, card: FetchableCard): Promise<bool
   return filledNumber
 }
 
+/** A frame (e.g. the balance form) that Chrome couldn't load: its error page instead. */
+export function hasRefusedFrame(page: Page): boolean {
+  return page.frames().some((f) => f.url().startsWith('chrome-error://'))
+}
+
 function isCaptchaFrame(frame: Frame): boolean {
   return /recaptcha|hcaptcha|challenges\.cloudflare/.test(frame.url())
 }
@@ -133,6 +138,9 @@ export function givexFetcher(provider: string, pageUrl: () => string): BalanceFe
         if (!res) throw new CheckError('blocked')
         if (res.status() >= 400) throw new CheckError('blocked')
         await page.waitForLoadState('load', { timeout: 20_000 }).catch(() => {})
+        // The merchant's bot protection sometimes refuses the balance form (inside a frame)
+        // to an automated browser. Say so now rather than hand over a dead page.
+        if (hasRefusedFrame(page)) throw new CheckError('blocked')
         const filled = await prefillCard(page, card)
         ctx.note?.(`page ${((Date.now() - started) / 1000).toFixed(1)}s, ${filled ? 'card filled' : 'form not found'}`)
         const baseline = new Set(await pageMessages(page))

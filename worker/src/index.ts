@@ -81,6 +81,12 @@ async function main() {
   })
   await signIn(sb, cfg)
 
+  // Anything left in progress belongs to a previous run of this worker (one check at a
+  // time), e.g. a live-view link from before a restart: fail it so the app moves on.
+  const released = await sb.rpc('release_balance_checks')
+  if (released.error) log(`release failed (${released.error.code ?? 'network'})`)
+  else if (released.data) log(`released ${released.data} unfinished check(s) from before the restart`)
+
   let viewer: Viewer | null = null
   if (cfg.viewerPublicUrl) {
     viewer = new Viewer(cfg.viewerPublicUrl, cfg.viewerPort)
