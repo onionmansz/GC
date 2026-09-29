@@ -31,8 +31,29 @@ export function canvasImageData(canvas: HTMLCanvasElement): ImageData {
   return ctx.getImageData(0, 0, canvas.width, canvas.height)
 }
 
-export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+/** Storage accepts up to 5 MB per image; stay well under it. */
+export const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024
+
+function toBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('encode_failed'))), 'image/png'),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('encode_failed'))), type, quality),
   )
+}
+
+/**
+ * Encode for upload as JPEG (photos as PNG can exceed the 5 MB storage limit), shrinking
+ * until it fits. Quality 0.9 keeps barcodes crisp; re-encoding also drops EXIF.
+ */
+export async function canvasToUploadImage(canvas: HTMLCanvasElement, maxBytes = MAX_UPLOAD_BYTES): Promise<Blob> {
+  let source = canvas
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const blob = await toBlob(source, 'image/jpeg', 0.9)
+    if (blob.size <= maxBytes) return blob
+    const smaller = document.createElement('canvas')
+    smaller.width = Math.round(source.width * 0.75)
+    smaller.height = Math.round(source.height * 0.75)
+    smaller.getContext('2d')?.drawImage(source, 0, 0, smaller.width, smaller.height)
+    source = smaller
+  }
+  return toBlob(source, 'image/jpeg', 0.8)
 }

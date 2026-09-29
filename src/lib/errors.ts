@@ -1,4 +1,4 @@
-import { logError } from './redact'
+import { logError, safeErrorCode } from './redact'
 
 // Maps server/network errors to fixed, friendly text. Raw messages are never shown,
 // because Postgres/PostgREST errors can echo submitted values (e.g. a card number).
@@ -15,13 +15,13 @@ const MESSAGES: Record<string, string> = {
   not_supported: 'Automatic checks aren\u2019t set up for this merchant.',
   in_use: 'This merchant still has cards. Move or delete them first.',
   offline: "You're offline. Changes need a connection.",
+  image_too_large: 'That image is too large. Try a screenshot or a smaller photo.',
 }
 
-const GENERIC = 'Something went wrong. Please try again.'
 
 export function errorCode(err: unknown): string | null {
   if (!err || typeof err !== 'object') return null
-  const e = err as { message?: unknown; code?: unknown }
+  const e = err as { message?: unknown; code?: unknown; status?: unknown; statusCode?: unknown }
   const message = typeof e.message === 'string' ? e.message : ''
   // Our RPCs/triggers raise bare codes as the message.
   if (Object.hasOwn(MESSAGES, message)) return message
@@ -30,6 +30,12 @@ export function errorCode(err: unknown): string | null {
     if (message.includes('merchants_household_name')) return 'merchants_household_name'
   }
   if (e.code === '23503') return 'in_use'
+  // Storage refused the upload (bucket limit 5 MB).
+  if (e.status === 413 || e.statusCode === '413' || /maximum allowed size|payload too large|entity too large/i.test(message)) {
+    return 'image_too_large'
+  }
+  // Signed-in session expired and couldn't be refreshed.
+  if (e.code === 'PGRST301' || e.code === 'PGRST303' || /JWT expired/i.test(message)) return 'not_authenticated'
   if (message === 'Failed to fetch' || message.includes('NetworkError') || message.includes('Load failed')) return 'offline'
   return null
 }
@@ -38,5 +44,6 @@ export function userMessage(err: unknown, context = 'request'): string {
   const code = errorCode(err)
   if (code) return MESSAGES[code]
   logError(context, err)
-  return GENERIC
+  // A short reference (error code only, never card data) so problems can be reported.
+  return `Something went wrong (ref ${safeErrorCode(err)}). Please try again.`
 }

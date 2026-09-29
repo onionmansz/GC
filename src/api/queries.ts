@@ -200,8 +200,10 @@ export interface CardInput {
 }
 
 async function uploadImage(householdId: string, image: Blob): Promise<string> {
-  const path = `${householdId}/${crypto.randomUUID()}.png`
-  const { error } = await supabase.storage.from(IMAGE_BUCKET).upload(path, image, { contentType: 'image/png', upsert: false })
+  const type = image.type === 'image/png' || image.type === 'image/webp' ? image.type : 'image/jpeg'
+  const ext = { 'image/png': 'png', 'image/webp': 'webp', 'image/jpeg': 'jpg' }[type]
+  const path = `${householdId}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from(IMAGE_BUCKET).upload(path, image, { contentType: type, upsert: false })
   if (error) throw error
   return path
 }
