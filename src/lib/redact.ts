@@ -23,14 +23,21 @@ export function groupCardNumber(cardNumber: string): string {
 
 const SAFE_CODE = /^(?:[0-9A-Z]{5}|[A-Za-z_]{1,40})$/ // SQLSTATE, or an identifier like 'TypeError'
 
+/**
+ * A short, safe identifier for an error: a SQLSTATE / API code, an HTTP status, or the
+ * error's class name. Never the message or payload, which may echo user input.
+ */
+export function safeErrorCode(err: unknown): string {
+  const e = (err && typeof err === 'object' ? err : {}) as { code?: unknown; status?: unknown; statusCode?: unknown }
+  const candidates = [e.code, e.statusCode, e.status, err instanceof Error ? err.name : typeof err]
+  for (const c of candidates) {
+    const s = typeof c === 'number' ? String(c) : c
+    if (typeof s === 'string' && (SAFE_CODE.test(s) || /^\d{3}$/.test(s))) return s
+  }
+  return 'unknown'
+}
+
 /** Log an error without its message or payload (which may echo user input). */
 export function logError(context: string, err: unknown): void {
-  const raw =
-    err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string'
-      ? (err as { code: string }).code
-      : err instanceof Error
-        ? err.name
-        : typeof err
-  const code = SAFE_CODE.test(raw) ? raw : 'unknown'
-  console.error(`[${redact(context)}] ${code}`)
+  console.error(`[${redact(context)}] ${safeErrorCode(err)}`)
 }

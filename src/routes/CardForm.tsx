@@ -11,7 +11,7 @@ import {
 } from '../api/queries'
 import { BARCODE_FORMATS, FORMAT_INFO, guessCardNumber, isBarcodeFormat, type BarcodeFormat } from '../lib/barcode/formats'
 import { renderBarcode } from '../lib/barcode/render'
-import { canvasImageData, canvasToPng, fileToCanvas } from '../lib/image'
+import { canvasImageData, canvasToUploadImage, fileToCanvas } from '../lib/image'
 import { parseMoneyToCents } from '../lib/money'
 import { userMessage } from '../lib/errors'
 import { logError } from '../lib/redact'
@@ -73,7 +73,7 @@ function CardForm({ card }: { card?: CardWithBalance }) {
     setDecode({ status: 'working' })
     try {
       const canvas = await fileToCanvas(file)
-      setImage(await canvasToPng(canvas))
+      setImage(await canvasToUploadImage(canvas))
       setRemoveImage(false)
       const { decodeBarcode } = await import('../lib/barcode/decode')
       const found = await decodeBarcode(canvasImageData(canvas))
