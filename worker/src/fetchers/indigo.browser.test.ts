@@ -58,6 +58,11 @@ function startFixture(): Promise<Server> {
       res.writeHead(200, { 'content-type': 'text/html' }).end('<input type=email placeholder=Email>')
       return
     }
+    if (url.pathname === '/api/givex/balance' && /HeadlessChrome/.test(req.headers['user-agent'] ?? '')) {
+      // Indigo's service refuses headless browsers without CORS headers.
+      res.writeHead(410).end()
+      return
+    }
     if (url.pathname === '/api/givex/balance' && req.method === 'POST') {
       let body = ''
       req.on('data', (c) => (body += c))
