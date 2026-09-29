@@ -6,6 +6,7 @@ export interface Config {
   pollIntervalMs: number
   checkTimeoutMs: number
   heartbeatFile: string
+  stateDir: string
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -17,7 +18,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     email: env.WORKER_EMAIL!,
     password: env.WORKER_PASSWORD!,
     pollIntervalMs: Number(env.POLL_INTERVAL_SECONDS ?? 5) * 1000,
-    checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 30) * 1000,
+    checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 60) * 1000,
     heartbeatFile: env.HEARTBEAT_FILE ?? '/tmp/worker-heartbeat',
+    stateDir: loadStateDir(env),
   }
+}
+
+/** Where saved merchant sign-ins live (a Docker volume in production). */
+export function loadStateDir(env: NodeJS.ProcessEnv = process.env): string {
+  return env.STATE_DIR ?? new URL('../state', import.meta.url).pathname
 }

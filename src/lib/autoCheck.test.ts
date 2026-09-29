@@ -10,6 +10,8 @@ describe('auto-check helpers', () => {
 
   it('maps failure codes to fixed text', () => {
     expect(checkFailureMessage('captcha')).toMatch(/CAPTCHA/)
+    expect(checkFailureMessage('relink_needed')).toMatch(/link-indigo/)
+    expect(checkFailureMessage('missing_pin')).toMatch(/PIN/)
     expect(checkFailureMessage('something_new')).toMatch(/failed/)
     expect(checkFailureMessage(null)).toMatch(/failed/)
   })

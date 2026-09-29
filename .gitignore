@@ -13,3 +13,4 @@ supabase/.branches
 .DS_Store
 worker/node_modules
 worker/.env
+worker/state

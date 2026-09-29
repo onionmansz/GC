@@ -46,7 +46,7 @@ async function runJob(job: Job, cfg: Config): Promise<{ cents: number } | { erro
   if (!fetcher) return { error: 'not_supported' }
   try {
     return await withTimeout(cfg.checkTimeoutMs, async (signal) => {
-      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { signal, fetch: globalThis.fetch })
+      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { signal, stateDir: cfg.stateDir })
       if (!Number.isSafeInteger(cents) || cents < 0) throw new CheckError('site_changed')
       return { cents }
     })

@@ -126,20 +126,24 @@ time they open the app; if you're signed out, use **Forgot password?**.
 
 The **Check balance now (automatic)** button on a card queues a request. A small worker
 running on your own server (Docker) picks it up within a few seconds, looks the balance
-up with the merchant, and records it. It shows in the
-card's history as **Balance set · Auto-check**.
+up with the merchant, and records it. It shows in the card's history as
+**Balance set · Auto-check**.
 
-- **Supported merchants:** Indigo. Indigo's cards are processed by Givex; the worker makes the
-  same single request Indigo's own gift card page makes
-  (`givex-integration.discolabs.com/api/v1/balance.json`, card number only; no PIN, login
-  or browser). If Indigo changes how its page works, checks fail with "the balance page has
-  changed" and record nothing; they never record a guessed amount.
-- **How the worker signs in:** it uses its own ordinary account, a household member marked
-  as a service account, with email + password. It never has the Supabase service_role key,
-  so row-level security still limits it to your household. It is hidden from "Who has it?".
-- **Privacy:** the card number goes only from Supabase to the merchant's processor (for Indigo,
-  exactly as Indigo's site sends it). The PIN isn't sent. The worker logs request ids and
-  outcome codes, never card data.
+- **Supported merchants: Indigo.** Indigo only shows balances to a signed-in Indigo account
+  (account.indigo.ca → Gift Cards). So the worker keeps its own saved sign-in to *your*
+  Indigo account, opens that page in a hidden browser, types the card number and PIN, and
+  reads Indigo's reply (`{"success":true,"balance":…}`). It never records a guessed amount:
+  anything unexpected fails with a clear message and changes nothing.
+- **Sign-in expiry:** Indigo signs the worker out now and then (how often is up to Indigo).
+  The app then says *"The checker's sign-in to the merchant has expired"*; re-run the link
+  command below.
+- **How the worker signs in to *this* app:** as its own ordinary account (an "Auto-check"
+  household member) with email + password. It never has the Supabase service_role key, so
+  row-level security still limits it to your household. Hidden from "Who has it?".
+- **Privacy:** card numbers and PINs go only from Supabase to Indigo, exactly as when you
+  check on Indigo's site. The worker logs request ids and outcome codes, never card data.
+  The saved Indigo sign-in (`indigo-session.json` in the worker's Docker volume) works like
+  a password for your Indigo account: keep the server private.
 
 ### Setup
 
@@ -148,17 +152,37 @@ card's history as **Balance set · Auto-check**.
    password, and tick **Auto Confirm User**.
 2. **Add it to your household:** edit the two emails in
    `supabase/snippets/add_auto_check_member.sql` and run it in the SQL editor.
-3. **Turn it on for Indigo:** in the app, go to **Settings → Merchants → Indigo →
-   Automatic balance check → Indigo**.
-4. **Run the worker on your server:**
+3. **Turn it on for Indigo:** in the app, **Settings → Merchants → Indigo → Automatic
+   balance check → Indigo**. Make sure your Indigo cards have their PIN saved.
+4. **Build the worker on your server:**
    ```bash
    git clone https://github.com/onionmansz/GC.git && cd GC/worker
    cp .env.example .env        # fill in SUPABASE_URL, SUPABASE_ANON_KEY, WORKER_EMAIL, WORKER_PASSWORD
-   docker compose up -d --build
+   docker compose build
+   ```
+5. **Link your Indigo account (one time, and again whenever it expires):**
+   ```bash
+   docker compose run --rm balance-worker npm run link-indigo
+   ```
+   It asks for your Indigo email; Indigo emails you a code; type it in. It says
+   **"Linked."** when done.
+6. **Start it:**
+   ```bash
+   docker compose up -d
    docker compose logs -f      # should say "signed in"
    ```
    It only makes outgoing connections (no ports to open). `docker ps` shows it as
-   *healthy* while it's running. To update later: `git pull && docker compose up -d --build`.
+   *healthy* while it's running. Update later with `git pull && docker compose up -d --build`.
+
+**If linking on the server fails** (e.g. Indigo shows a "prove you're human" check), link
+on a computer with a screen instead, then copy the result to the server:
+```bash
+# on the PC (Node 22+):
+cd GC/worker && npm ci && npx playwright install chromium
+npm run link-indigo -- --headed            # a browser opens; sign in normally
+# copy worker/state/indigo-session.json to the server; then, with the worker running (docker compose up -d):
+docker compose cp indigo-session.json balance-worker:/app/state/indigo-session.json
+```
 
 If you tap the button and it stays on "Queued…", the app tells you the worker doesn't
 seem to be running.

@@ -1,61 +1,58 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { CheckError } from '../errors'
-import { INDIGO_BALANCE_URL, INDIGO_SHOP, indigoFetcher, interpretGivexResponse } from './indigo'
+import { interpretBalanceJson, interpretBalanceResponse, isLoginUrl } from './indigo'
 
-const card = { cardNumber: '6006 4912 3456 7890', pin: '1234' }
-
-function stubFetch(status: number, body: unknown) {
-  return vi.fn(async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status }))
+const codeOf = (fn: () => unknown) => {
+  try {
+    fn()
+  } catch (err) {
+    expect(err).toBeInstanceOf(CheckError)
+    return (err as CheckError).code
+  }
+  throw new Error('expected a CheckError')
 }
 
-async function run(fetch: ReturnType<typeof stubFetch>) {
-  return indigoFetcher.fetch(card, { fetch: fetch as unknown as typeof globalThis.fetch, signal: new AbortController().signal })
-}
-
-async function code(p: Promise<unknown>) {
-  const err = await p.catch((e: unknown) => e)
-  expect(err).toBeInstanceOf(CheckError)
-  return (err as CheckError).code
-}
-
-describe('indigo fetcher', () => {
-  it('sends the same request as indigo.ca: shop + card number, no PIN', async () => {
-    const fetch = stubFetch(200, { success: true, response_code: '0', balance: '37.66' })
-    expect(await run(fetch)).toBe(3766)
-    const [url] = fetch.mock.calls[0] as unknown as [URL]
-    expect(`${url.origin}${url.pathname}`).toBe(INDIGO_BALANCE_URL)
-    expect(Object.fromEntries(url.searchParams)).toEqual({ shop: INDIGO_SHOP, voucher_number: '6006491234567890', security_code: '' })
+describe("reading Indigo's balance service reply", () => {
+  it('reads the observed success reply', () => {
+    expect(interpretBalanceResponse(200, '{"success":true,"balance":39.54,"error":null}')).toBe(3954)
+    expect(interpretBalanceResponse(200, '{"success":true,"balance":0,"error":null}')).toBe(0)
+    expect(interpretBalanceResponse(200, '{"success":true,"balance":"250.5","error":null}')).toBe(25050)
   })
 
-  it('reads the balance from any of the fields the page accepts', () => {
-    expect(interpretGivexResponse({ balance: 12 })).toBe(1200)
-    expect(interpretGivexResponse({ current_balance: '0.00', response_code: '00' })).toBe(0)
-    expect(interpretGivexResponse({ available_balance: '250.5' })).toBe(25050)
+  it('treats a plain-text 500 (what an unknown card gets) as invalid card', () => {
+    expect(codeOf(() => interpretBalanceResponse(500, 'Internal Server Error'))).toBe('invalid_card')
+    expect(codeOf(() => interpretBalanceResponse(500, ''))).toBe('invalid_card')
+    expect(codeOf(() => interpretBalanceResponse(500, '{"success":false,"error":"Invalid card"}'))).toBe('invalid_card')
   })
 
-  it('treats rejections as invalid card', () => {
-    expect(() => interpretGivexResponse({ response_code: '2', balance: '0' })).toThrowError(new CheckError('invalid_card'))
-    expect(() => interpretGivexResponse({ success: false })).toThrowError(new CheckError('invalid_card'))
-    expect(() => interpretGivexResponse({ errors: ['Invalid voucher'] })).toThrowError(new CheckError('invalid_card'))
+  it('asks for a re-link when the sign-in token is refused', () => {
+    for (const status of [401, 403, 410]) expect(codeOf(() => interpretBalanceResponse(status, ''))).toBe('relink_needed')
   })
 
-  it('never guesses when the balance is missing or odd', () => {
-    expect(() => interpretGivexResponse({ success: true })).toThrowError(new CheckError('site_changed'))
-    expect(() => interpretGivexResponse({ balance: 'N/A' })).toThrowError(new CheckError('site_changed'))
+  it('reports throttling and outages as blocked', () => {
+    expect(codeOf(() => interpretBalanceResponse(429, ''))).toBe('blocked')
+    expect(codeOf(() => interpretBalanceResponse(502, '<html>'))).toBe('blocked')
   })
 
-  it('maps HTTP failures', async () => {
-    expect(await code(run(stubFetch(429, '')))).toBe('blocked')
-    expect(await code(run(stubFetch(403, '')))).toBe('blocked')
-    expect(await code(run(stubFetch(500, '')))).toBe('blocked')
-    expect(await code(run(stubFetch(404, '')))).toBe('invalid_card')
-    expect(await code(run(stubFetch(200, '<html>not json</html>')))).toBe('site_changed')
+  it('never guesses: success without a usable balance is site_changed', () => {
+    expect(codeOf(() => interpretBalanceResponse(200, '<html>'))).toBe('site_changed')
+    expect(codeOf(() => interpretBalanceJson({ success: true, error: null }))).toBe('site_changed')
+    expect(codeOf(() => interpretBalanceJson({ success: true, balance: 'N/A' }))).toBe('site_changed')
+    expect(codeOf(() => interpretBalanceJson(null))).toBe('site_changed')
   })
 
-  it('rejects card numbers that are not digits before calling out', async () => {
-    const fetch = stubFetch(200, {})
-    const p = indigoFetcher.fetch({ cardNumber: 'abc', pin: null }, { fetch: fetch as unknown as typeof globalThis.fetch, signal: new AbortController().signal })
-    expect(await code(p)).toBe('invalid_card')
-    expect(fetch).not.toHaveBeenCalled()
+  it("follows the page's failure rules", () => {
+    expect(codeOf(() => interpretBalanceJson({ success: false, balance: 10 }))).toBe('invalid_card')
+    expect(codeOf(() => interpretBalanceJson({ error: 'nope', balance: 10 }))).toBe('invalid_card')
+    expect(codeOf(() => interpretBalanceJson({ response_code: '2', balance: 10 }))).toBe('invalid_card')
+    expect(interpretBalanceJson({ response_code: '00', current_balance: '5.00' })).toBe(500)
+  })
+})
+
+describe('isLoginUrl', () => {
+  it('spots the Shopify sign-in redirect', () => {
+    expect(isLoginUrl('https://account.indigo.ca/authentication/login?client_id=x')).toBe(true)
+    expect(isLoginUrl('https://account.indigo.ca/pages/019b9e7d?locale=en')).toBe(false)
+    expect(isLoginUrl('not a url')).toBe(false)
   })
 })

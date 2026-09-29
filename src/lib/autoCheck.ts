@@ -16,7 +16,10 @@ export type CheckStatus = 'pending' | 'running' | 'done' | 'failed'
 /** Friendly text for the worker's error codes (worker/src/errors.ts). */
 const FAILURES: Record<string, string> = {
   captcha: 'The merchant asked for a CAPTCHA, so it couldn’t check automatically. Use “Check balance ↗” instead.',
-  invalid_card: 'The merchant didn’t recognise this card number or PIN.',
+  invalid_card: 'The merchant didn’t accept this card number or PIN. Check both on the card.',
+  missing_pin: 'This merchant needs the card’s PIN. Add it with Edit, then try again.',
+  relink_needed:
+    'The checker’s sign-in to the merchant has expired. On your server run: docker compose run --rm balance-worker npm run link-indigo',
   site_changed: 'The merchant’s balance page has changed. The checker needs updating.',
   blocked: 'The merchant blocked the automated check. Try again later.',
   timeout: 'The check took too long. Try again.',

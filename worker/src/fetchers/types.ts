@@ -7,8 +7,8 @@ export interface FetchableCard {
 export interface FetchContext {
   /** Aborts when the check exceeds its time limit. */
   signal: AbortSignal
-  /** HTTP client (global fetch in production; stubbed in tests). */
-  fetch: typeof globalThis.fetch
+  /** Directory for per-merchant saved sign-ins (worker/state, a Docker volume). */
+  stateDir: string
 }
 
 /**

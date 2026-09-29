@@ -8,6 +8,8 @@ export type CheckErrorCode =
   | 'blocked' // rate-limited / bot-blocked / HTTP error
   | 'timeout' // the check took too long
   | 'not_supported' // no fetcher for this provider
+  | 'relink_needed' // the saved merchant sign-in expired; re-run the link command
+  | 'missing_pin' // the merchant needs the PIN and the card has none
   | 'unknown'
 
 export class CheckError extends Error {
