@@ -4,6 +4,7 @@ import { useIsFetching } from '@tanstack/react-query'
 import { useOnline } from '../lib/queryClient'
 import { timeAgo } from '../lib/time'
 import { maskCardNumber } from '../lib/redact'
+import { copyText } from '../lib/clipboard'
 
 export function Page({
   title,
@@ -205,5 +206,26 @@ export function EmptyState({ children, action }: { children: ReactNode; action?:
         </Link>
       )}
     </div>
+  )
+}
+
+/** Small "Copy" button; shows "Copied" briefly. The value is never displayed or logged. */
+export function CopyButton({ value, what }: { value: string; what: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  useEffect(() => {
+    if (state === 'idle') return
+    const t = setTimeout(() => setState('idle'), 2000)
+    return () => clearTimeout(t)
+  }, [state])
+  return (
+    <button
+      type="button"
+      className="ml-2 rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-700 active:bg-slate-100"
+      aria-label={`Copy ${what}`}
+      data-testid={`copy-${what.replace(/\s+/g, '-').toLowerCase()}`}
+      onClick={() => void copyText(value).then((ok) => setState(ok ? 'copied' : 'failed'))}
+    >
+      {state === 'copied' ? 'Copied ✓' : state === 'failed' ? 'Copy failed' : 'Copy'}
+    </button>
   )
 }
