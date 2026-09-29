@@ -10,6 +10,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "link-indigo": "tsx src/link-indigo.ts",
+    "debug-indigo": "tsx src/debug-indigo.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
