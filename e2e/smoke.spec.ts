@@ -37,7 +37,6 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   const consoleText: string[] = []
   page.on('console', (m) => consoleText.push(m.text()))
   const visited: string[] = []
-  page.on('framenavigated', (f) => f === page.mainFrame() && visited.push(f.url()))
 
   // Invite link (generated server-side, no email needed) → choose a password.
   const link = await admin.auth.admin.generateLink({ type: 'invite', email })
@@ -91,6 +90,27 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   await expect(page.getByTestId('ledger')).toContainText('−$12.34')
 
   // Show at till: barcode rendered from the decoded value, number in large text, PIN masked.
+  // Manual balance check: the merchant's page opens inside the app with copy buttons
+  // and "Set balance" at hand.
+  const cardUrl = page.url()
+  await page.goto('/settings')
+  await page.getByRole('button', { name: /Indigo/ }).click()
+  await page.getByLabel('Balance check page (optional)').fill('https://example.com/balance')
+  await page.getByRole('button', { name: 'Save merchant' }).click()
+  await expect(page.getByText('balance page set')).toBeVisible()
+  await page.goto(cardUrl)
+  await page.getByRole('button', { name: 'Check balance', exact: true }).click()
+  const panel = page.getByTestId('balance-check-panel')
+  await expect(panel).toBeVisible()
+  await expect(panel.getByTestId('balance-check-frame')).toHaveAttribute('src', 'https://example.com/balance')
+  await expect(panel.getByTestId('copy-card-number')).toBeVisible()
+  await expect(panel.getByTestId('copy-pin')).toBeVisible()
+  await expect(panel.getByRole('link', { name: 'Open in browser ↗' })).toHaveAttribute('href', 'https://example.com/balance')
+  await panel.getByRole('button', { name: 'Set balance' }).click()
+  await expect(panel).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: 'Set balance' })).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+
   await page.getByTestId('show-at-till').click()
   await expect(page.getByTestId('till-mode')).toBeVisible()
   await expect(page.getByTestId('barcode-canvas')).toHaveAttribute('data-rendered', 'true')
