@@ -18,7 +18,7 @@ import { adjustDelta, checkLoad, checkSpend } from '../lib/ledger'
 import { userMessage } from '../lib/errors'
 import { useOnline } from '../lib/queryClient'
 import { formatDateTime, timeAgo } from '../lib/time'
-import { checkFailureMessage, isStalePending } from '../lib/autoCheck'
+import { checkFailureMessage, isActiveCheck, isStalePending } from '../lib/autoCheck'
 import { CopyButton, EmptyState, ErrorText, MaskedNumber, MaskedPin, MerchantDot, MoneyInput, Page, Sheet, Splash } from '../components/ui'
 import { copyText } from '../lib/clipboard'
 import { BalanceCheckPanel } from '../components/BalanceCheckPanel'
@@ -180,11 +180,14 @@ function AutoCheck({ card }: { card: CardWithBalance }) {
   const latest = useLatestBalanceCheck(card.id, true)
   const request = useRequestBalanceCheck()
   const check = latest.data
-  const active = check?.status === 'pending' || check?.status === 'running'
+  const active = isActiveCheck(check?.status)
+  const viewerUrl = check?.status === 'awaiting_user' && check.viewer_url && /^https?:\/\//.test(check.viewer_url) ? check.viewer_url : null
 
   let status: React.ReactNode = null
   if (request.error) status = <span className="text-red-700">{userMessage(request.error, 'request-check')}</span>
-  else if (check && active) {
+  else if (viewerUrl) {
+    status = 'Opens a live view of the merchant’s page on your home server (home Wi-Fi or Tailscale). Tick “I’m not a robot”, then tap the page’s balance button.'
+  } else if (check && active) {
     status = isStalePending(check.status, check.created_at)
       ? "Still waiting. The checker on your home server doesn't seem to be running."
       : check.status === 'running'
@@ -198,14 +201,20 @@ function AutoCheck({ card }: { card: CardWithBalance }) {
 
   return (
     <div className="mb-1" data-testid="auto-check">
-      <button
-        type="button"
-        className="btn-secondary w-full"
-        disabled={!online || active || request.isPending}
-        onClick={() => request.mutate(card.id)}
-      >
-        {active ? 'Checking balance…' : 'Check balance now (automatic)'}
-      </button>
+      {viewerUrl ? (
+        <a href={viewerUrl} target="_blank" rel="noopener noreferrer" className="btn-primary w-full" data-testid="assist-link">
+          Your turn: finish the robot check ↗
+        </a>
+      ) : (
+        <button
+          type="button"
+          className="btn-secondary w-full"
+          disabled={!online || active || request.isPending}
+          onClick={() => request.mutate(card.id)}
+        >
+          {active ? 'Checking balance…' : 'Check balance now (automatic)'}
+        </button>
+      )}
       {status && (
         <p className="mt-1 text-center text-xs text-slate-600" role="status" data-testid="auto-check-status">
           {status}

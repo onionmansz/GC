@@ -14,7 +14,11 @@ services:
     volumes:
       # Saved Indigo sign-in. Treat like a password: it lets its holder use your Indigo account.
       - indigo-state:/app/state
-    # No ports: the worker only makes outgoing connections.
+    # Live view for assisted checks (Sport Chek): your phone opens it to tick
+    # "I'm not a robot". Home network / Tailscale only: never forward this port on
+    # your router. Remove this if you don't use assisted checks.
+    ports:
+      - '8787:8787'
     logging:
       driver: json-file
       options: { max-size: '5m', max-file: '3' }

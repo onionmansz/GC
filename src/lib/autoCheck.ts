@@ -3,6 +3,7 @@
 
 export const AUTO_CHECK_PROVIDERS = {
   indigo: 'Indigo (indigo.ca)',
+  sportchek: 'Sport Chek (Givex, you tick “I’m not a robot”)',
 } as const
 
 export type AutoCheckProvider = keyof typeof AUTO_CHECK_PROVIDERS
@@ -11,7 +12,12 @@ export function isAutoCheckProvider(value: unknown): value is AutoCheckProvider 
   return typeof value === 'string' && Object.hasOwn(AUTO_CHECK_PROVIDERS, value)
 }
 
-export type CheckStatus = 'pending' | 'running' | 'done' | 'failed'
+export type CheckStatus = 'pending' | 'running' | 'awaiting_user' | 'done' | 'failed'
+
+/** Still in progress (the button stays disabled and the app keeps polling). */
+export function isActiveCheck(status: CheckStatus | undefined): boolean {
+  return status === 'pending' || status === 'running' || status === 'awaiting_user'
+}
 
 /** Friendly text for the worker's error codes (worker/src/errors.ts). */
 const FAILURES: Record<string, string> = {
@@ -24,6 +30,9 @@ const FAILURES: Record<string, string> = {
   blocked: 'The merchant blocked the automated check. Try again later.',
   timeout: 'The check took too long. Try again.',
   not_supported: 'Automatic checks aren’t set up for this merchant.',
+  no_viewer:
+    'This merchant needs you to tick “I’m not a robot”, and the live view isn’t set up. Set VIEWER_PUBLIC_URL in the worker’s .env (see README → Assisted checks).',
+  cancelled: 'Check cancelled.',
 }
 
 export function checkFailureMessage(code: string | null | undefined): string {

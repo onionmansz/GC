@@ -1,9 +1,11 @@
 import { writeFile } from 'node:fs/promises'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Page } from 'playwright'
 import { loadConfig, type Config } from './config'
 import { CheckError, errorCodeOf } from './errors'
 import { getFetcher } from './fetchers/index'
+import { Viewer } from './viewer'
 
 // Balance-check worker. Signs in as the household's "Auto-check" service member
 // (email + password, ordinary user: RLS applies), polls for queued checks, runs the
@@ -41,13 +43,29 @@ async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<
   }
 }
 
-async function runJob(job: Job, cfg: Config, notes: string[]): Promise<{ cents: number } | { error: string }> {
+async function runJob(
+  job: Job,
+  cfg: Config,
+  sb: SupabaseClient,
+  viewer: Viewer | null,
+  notes: string[],
+): Promise<{ cents: number } | { error: string }> {
   const fetcher = getFetcher(job.provider)
   if (!fetcher) return { error: 'not_supported' }
+  const card = { cardNumber: job.card_number, pin: job.pin }
+  // Assisted checks: show the page in the live view and tell the app it's the person's turn.
+  const handOver = viewer
+    ? async (page: Page) => {
+        const url = await viewer.open(page, card)
+        const { error } = await sb.rpc('await_user_balance_check', { p_request_id: job.request_id, p_viewer_url: url })
+        if (error) throw new CheckError('unknown')
+        notes.push('handed over')
+      }
+    : undefined
   try {
-    return await withTimeout(cfg.checkTimeoutMs, async (signal) => {
+    return await withTimeout(fetcher.assisted ? cfg.assistTimeoutMs : cfg.checkTimeoutMs, async (signal) => {
       const note = (m: string) => notes.push(m)
-      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { signal, stateDir: cfg.stateDir, note })
+      const cents = await fetcher.fetch(card, { signal, stateDir: cfg.stateDir, note, handOver })
       if (!Number.isSafeInteger(cents) || cents < 0) throw new CheckError('site_changed')
       return { cents }
     })
@@ -62,6 +80,13 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: true },
   })
   await signIn(sb, cfg)
+
+  let viewer: Viewer | null = null
+  if (cfg.viewerPublicUrl) {
+    viewer = new Viewer(cfg.viewerPublicUrl, cfg.viewerPort)
+    const port = await viewer.start()
+    log(`live view for assisted checks on port ${port}`)
+  }
 
   let stopping = false
   for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => (stopping = true))
@@ -86,15 +111,17 @@ async function main() {
 
     const started = Date.now()
     const notes: string[] = []
-    const outcome = await runJob(job, cfg, notes)
+    const outcome = await runJob(job, cfg, sb, viewer, notes)
     const done = await sb.rpc('complete_balance_check', {
       p_request_id: job.request_id,
       p_balance_cents: 'cents' in outcome ? outcome.cents : null,
       p_error_code: 'error' in outcome ? outcome.error : null,
     })
+    await viewer?.close('cents' in outcome && !done.error ? 'done' : 'failed')
     const result = 'cents' in outcome ? 'ok' : `failed:${outcome.error}`
     log(`request ${job.request_id} provider=${job.provider} ${result} in ${Date.now() - started}ms${notes.length ? ` [${notes.join(', ')}]` : ''}${done.error ? ` (report failed: ${done.error.code})` : ''}`)
   }
+  await viewer?.stop()
   log('stopped')
 }
 
