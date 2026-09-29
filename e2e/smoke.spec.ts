@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { toBuffer } from 'bwip-js/node'
 import { randomUUID } from 'node:crypto'
+import { TEST_PASSWORD } from './helpers'
 
 const url = process.env.SUPABASE_TEST_URL
 const anonKey = process.env.SUPABASE_TEST_ANON_KEY
@@ -18,9 +19,6 @@ const email = `e2e-${randomUUID().slice(0, 8)}@example.com`
 
 test.beforeAll(async () => {
   admin = createClient(url!, serviceKey!, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true })
-  if (error) throw error
-  userId = data.user.id
 })
 
 test.afterAll(async () => {
@@ -41,10 +39,19 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   const visited: string[] = []
   page.on('framenavigated', (f) => f === page.mainFrame() && visited.push(f.url()))
 
-  // Sign in with a real magic-link token (generated server-side, no email needed).
-  const link = await admin.auth.admin.generateLink({ type: 'magiclink', email })
+  // Invite link (generated server-side, no email needed) → choose a password.
+  const link = await admin.auth.admin.generateLink({ type: 'invite', email })
   if (link.error) throw link.error
-  await page.goto(`/auth/confirm?token_hash=${link.data.properties.hashed_token}&type=magiclink`)
+  userId = link.data.user.id
+  await page.goto(`/auth/confirm?token_hash=${link.data.properties.hashed_token}&type=invite`)
+  await expect(page.getByRole('heading', { name: 'Choose a password' })).toBeVisible()
+  await page.getByLabel('New password').fill('short')
+  await page.getByLabel('Confirm password').fill('short')
+  await page.getByRole('button', { name: 'Save password' }).click()
+  await expect(page.getByRole('alert')).toContainText('at least 10')
+  await page.getByLabel('New password').fill(TEST_PASSWORD)
+  await page.getByLabel('Confirm password').fill(TEST_PASSWORD)
+  await page.getByRole('button', { name: 'Save password' }).click()
 
   // First run: create the household (seeds Indigo, Esso, Tim Hortons).
   await page.getByLabel('Your name').fill('E2E')
@@ -94,6 +101,19 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   })
   expect(darkRatio).toBeGreaterThan(0.2)
   expect(darkRatio).toBeLessThan(0.8)
+
+  // Sign out, then back in with the password.
+  await page.getByRole('button', { name: 'Done' }).click()
+  await page.goto('/settings')
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+  await page.getByLabel('Email', { exact: true }).fill(email)
+  await page.getByLabel('Password', { exact: true }).fill('wrong password here')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Wrong email or password.')
+  await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByTestId('grand-total')).toHaveText('$37.66')
 
   // Secrets never appear in URLs or console output.
   for (const u of [...visited, page.url()]) {

@@ -4,6 +4,23 @@ import { supabase } from '../lib/supabase'
 import { clearLocalData, useOnline } from '../lib/queryClient'
 
 const LAST_USER_KEY = 'wallet.lastUserId'
+const RECOVERY_KEY = 'wallet.passwordRecovery'
+
+function markPasswordRecovery() {
+  try {
+    sessionStorage.setItem(RECOVERY_KEY, '1')
+  } catch {
+    // ignore: the user can still change it from Settings
+  }
+}
+
+function inRecovery(): boolean {
+  try {
+    return sessionStorage.getItem(RECOVERY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 interface AuthState {
   status: 'loading' | 'signedIn' | 'signedOut'
@@ -11,6 +28,11 @@ interface AuthState {
   /** Offline (or auth unreachable) without a live session: cached data is shown until reconnect. */
   offlineOnly: boolean
   email: string | undefined
+  /** The signed-in user must set a password before using the app. */
+  needsPassword: 'first' | 'recovery' | null
+  finishPasswordSetup: () => void
+  /** A "forgot password" link was verified: require a new password before continuing. */
+  beginPasswordRecovery: () => void
   signOut: () => Promise<void>
 }
 
@@ -37,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [slow, setSlow] = useState(false)
+  const [recovery, setRecovery] = useState(inRecovery)
   const online = useOnline()
 
   // On a weak or absent connection supabase-js can take a long time to settle the
@@ -56,14 +79,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(next)
       setLoading(false)
     }
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        markPasswordRecovery()
+        setRecovery(true)
+      }
       // Defer: calling other supabase methods inside this callback can deadlock.
       setTimeout(() => void handle(next), 0)
     })
     return () => data.subscription.unsubscribe()
   }, [])
 
+  const beginPasswordRecovery = useCallback(() => {
+    markPasswordRecovery()
+    setRecovery(true)
+  }, [])
+
+  const finishPasswordSetup = useCallback(() => {
+    try {
+      sessionStorage.removeItem(RECOVERY_KEY)
+    } catch {
+      // ignore
+    }
+    setRecovery(false)
+    // Pick up user_metadata.password_set from the updated user.
+    void supabase.auth.refreshSession().then(({ data }) => data.session && setSession(data.session))
+  }, [])
+
   const signOut = useCallback(async () => {
+    try {
+      sessionStorage.removeItem(RECOVERY_KEY)
+    } catch {
+      // ignore
+    }
+    setRecovery(false)
     await supabase.auth.signOut({ scope: 'local' })
     writeLastUser(null)
     await clearLocalData()
@@ -76,9 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: session?.user.id ?? cachedUser ?? undefined,
       offlineOnly: Boolean(cachedUser),
       email: session?.user.email,
+      // Invited accounts and accounts from the magic-link era have no password yet.
+      needsPassword: !session ? null : recovery ? 'recovery' : session.user.user_metadata?.password_set === true ? null : 'first',
+      finishPasswordSetup,
+      beginPasswordRecovery,
       signOut,
     }
-  }, [loading, slow, session, online, signOut])
+  }, [loading, slow, session, online, recovery, finishPasswordSetup, beginPasswordRecovery, signOut])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

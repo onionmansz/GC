@@ -4,9 +4,10 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Splash } from '../components/ui'
 import { logError } from '../lib/redact'
+import { useAuth } from '../auth/AuthProvider'
 
 /**
- * Token-hash sign-in link: /auth/confirm?token_hash=…&type=magiclink.
+ * Token-hash email link: /auth/confirm?token_hash=…&type=invite|recovery|magiclink.
  * Used if the Supabase email template is switched to token_hash links (recommended;
  * works when the link is opened in a different browser than the one that asked).
  * The default template's redirect-with-fragment links are handled by supabase-js.
@@ -15,6 +16,7 @@ export function AuthConfirm() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const [failed, setFailed] = useState(false)
+  const { beginPasswordRecovery } = useAuth()
   const ran = useRef(false)
 
   useEffect(() => {
@@ -32,10 +34,12 @@ export function AuthConfirm() {
         setFailed(true)
         return
       }
-      // Drop the token from the address bar and history.
+      if (type === 'recovery') beginPasswordRecovery()
+      // Drop the token from the address bar and history. Invited users without a
+      // password yet are sent to "Choose a password" by the app gate.
       navigate('/', { replace: true })
     })
-  }, [params, navigate])
+  }, [params, navigate, beginPasswordRecovery])
 
   if (failed) {
     return (
