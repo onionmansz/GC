@@ -27,12 +27,13 @@ const FAILURES: Record<string, string> = {
   relink_needed:
     'The checker’s sign-in to the merchant has expired. On your server run: docker compose run --rm balance-worker npm run link-indigo',
   site_changed: 'The merchant’s balance page has changed. The checker needs updating.',
-  blocked: 'The merchant blocked the automated check. Try again later.',
+  blocked: 'The merchant blocked the automated check. Use “Check balance” to check it yourself.',
   timeout: 'The check took too long. Try again.',
   not_supported: 'Automatic checks aren’t set up for this merchant.',
   no_viewer:
     'This merchant needs you to tick “I’m not a robot”, and the live view isn’t set up. Set VIEWER_PUBLIC_URL in the worker’s .env (see README → Assisted checks).',
   cancelled: 'Check cancelled.',
+  interrupted: 'The checker restarted before this check finished. Try again.',
 }
 
 export function checkFailureMessage(code: string | null | undefined): string {
