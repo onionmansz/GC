@@ -2,7 +2,8 @@ import { onlineManager, useMutation, useQuery, useQueryClient } from '@tanstack/
 import { supabase, IMAGE_BUCKET } from '../lib/supabase'
 import { signedAmount } from '../lib/ledger'
 import type { BarcodeFormat } from '../lib/barcode/formats'
-import type { Card, CardWithBalance, Household, Invite, Member, MerchantSummary, Transaction } from './types'
+import type { BalanceCheck, Card, CardWithBalance, Household, Invite, Member, MerchantSummary, Transaction } from './types'
+import type { AutoCheckProvider } from '../lib/autoCheck'
 import { useAuth } from '../auth/AuthProvider'
 
 // Query keys contain only ids — never card numbers or PINs.
@@ -14,6 +15,7 @@ export const keys = {
   cards: ['cards'] as const,
   transactions: (cardId: string) => ['transactions', cardId] as const,
   image: (path: string) => ['image', path] as const,
+  balanceCheck: (cardId: string) => ['balanceCheck', cardId] as const,
 }
 
 function requireOnline() {
@@ -41,7 +43,7 @@ export function useMyHousehold() {
       const row = unwrap(
         await supabase
           .from('household_members')
-          .select('household_id, user_id, display_name, households ( id, name )')
+          .select('household_id, user_id, display_name, is_service, households ( id, name )')
           .eq('user_id', userId!)
           .maybeSingle(),
       ) as (Member & { households: Household }) | null
@@ -56,7 +58,7 @@ export function useMembers() {
   return useQuery({
     queryKey: keys.members,
     queryFn: async () =>
-      unwrap(await supabase.from('household_members').select('household_id, user_id, display_name').order('joined_at')) as Member[],
+      unwrap(await supabase.from('household_members').select('household_id, user_id, display_name, is_service').order('joined_at')) as Member[],
   })
 }
 
@@ -299,6 +301,7 @@ export interface MerchantInput {
   category: string
   color: string
   balanceCheckUrl: string
+  autoCheck: AutoCheckProvider | null
 }
 
 function merchantRow(v: MerchantInput) {
@@ -307,6 +310,7 @@ function merchantRow(v: MerchantInput) {
     category: v.category.trim() || 'Other',
     color: v.color,
     balance_check_url: v.balanceCheckUrl.trim() || null,
+    auto_check: v.autoCheck,
   }
 }
 
@@ -416,5 +420,51 @@ export function useUpdateHouseholdName() {
       unwrap(await supabase.from('households').update({ name: v.name.trim() }).eq('id', v.id))
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['household'] }),
+  })
+}
+
+// ---------------------------------------------------------------- automated balance checks
+
+/**
+ * Latest automated check for a card. Polls every 2 s while a check is queued or
+ * running; when one finishes, refreshes the balance and ledger.
+ */
+export function useLatestBalanceCheck(cardId: string, enabled: boolean) {
+  const invalidate = useInvalidateCards()
+  const qc = useQueryClient()
+  return useQuery({
+    queryKey: keys.balanceCheck(cardId),
+    enabled,
+    queryFn: async (): Promise<BalanceCheck | null> => {
+      const row = unwrap(
+        await supabase
+          .from('balance_check_requests')
+          .select('id, status, result_cents, error_code, created_at, finished_at')
+          .eq('card_id', cardId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ) as BalanceCheck | null
+      const prev = qc.getQueryData<BalanceCheck | null>(keys.balanceCheck(cardId))
+      const justFinished = row?.status === 'done' && prev?.id === row.id && prev.status !== 'done'
+      if (justFinished) await invalidate(cardId)
+      return row && { ...row, result_cents: row.result_cents === null ? null : Number(row.result_cents) }
+    },
+    refetchInterval: (q) => {
+      const s = q.state.data?.status
+      return s === 'pending' || s === 'running' ? 2000 : false
+    },
+    staleTime: 0,
+  })
+}
+
+export function useRequestBalanceCheck() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (cardId: string) => {
+      requireOnline()
+      return unwrap(await supabase.rpc('request_balance_check', { p_card_id: cardId })) as string
+    },
+    onSuccess: (_id, cardId) => qc.invalidateQueries({ queryKey: keys.balanceCheck(cardId) }),
   })
 }

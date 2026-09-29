@@ -1,10 +1,13 @@
 import type { BarcodeFormat } from '../lib/barcode/formats'
 import type { TransactionType } from '../lib/ledger'
+import type { AutoCheckProvider, CheckStatus } from '../lib/autoCheck'
 
 export interface Member {
   household_id: string
   user_id: string
   display_name: string
+  /** Automated worker account (e.g. the balance checker); hidden from people pickers. */
+  is_service: boolean
 }
 
 export interface Household {
@@ -19,6 +22,7 @@ export interface MerchantSummary {
   category: string
   color: string
   balance_check_url: string | null
+  auto_check: AutoCheckProvider | null
   active_card_count: number
   total_balance_cents: number
 }
@@ -53,6 +57,15 @@ export interface Transaction {
   note: string | null
   created_by: string
   created_at: string
+}
+
+export interface BalanceCheck {
+  id: string
+  status: CheckStatus
+  result_cents: number | null
+  error_code: string | null
+  created_at: string
+  finished_at: string | null
 }
 
 export interface Invite {
