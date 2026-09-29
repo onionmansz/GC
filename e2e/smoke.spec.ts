@@ -73,6 +73,15 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   await expect(page.getByTestId('card-balance')).toHaveText('$50.00')
   await expect(page.getByTestId('pin')).not.toContainText(PIN)
 
+  // Copy buttons put the number / PIN on the clipboard without revealing them on screen.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.getByTestId('copy-card-number').click()
+  await expect(page.getByTestId('copy-card-number')).toHaveText('Copied ✓')
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(CARD_NUMBER)
+  await page.getByTestId('copy-pin').click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(PIN)
+  await expect(page.getByTestId('pin')).not.toContainText(PIN)
+
   // Spend and watch the balance update.
   await page.getByRole('button', { name: 'Spent $' }).click()
   await page.getByLabel('Amount').fill('12.34')

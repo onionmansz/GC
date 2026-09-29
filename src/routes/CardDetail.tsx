@@ -19,7 +19,8 @@ import { userMessage } from '../lib/errors'
 import { useOnline } from '../lib/queryClient'
 import { formatDateTime, timeAgo } from '../lib/time'
 import { checkFailureMessage, isStalePending } from '../lib/autoCheck'
-import { EmptyState, ErrorText, MaskedNumber, MaskedPin, MerchantDot, MoneyInput, Page, Sheet, Splash } from '../components/ui'
+import { CopyButton, EmptyState, ErrorText, MaskedNumber, MaskedPin, MerchantDot, MoneyInput, Page, Sheet, Splash } from '../components/ui'
+import { copyText } from '../lib/clipboard'
 
 type Action = 'spend' | 'load' | 'set'
 
@@ -49,10 +50,7 @@ export function CardDetail() {
   function checkBalance() {
     if (!merchant?.balance_check_url) return
     // Both calls happen synchronously inside the tap, which iOS requires for clipboard and pop-ups.
-    void navigator.clipboard?.writeText(c.card_number).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    )
+    void copyText(c.card_number.replace(/\s+/g, '')).then(setCopied)
     window.open(merchant.balance_check_url, '_blank', 'noopener,noreferrer')
   }
 
@@ -81,12 +79,14 @@ export function CardDetail() {
         {c.archived && <p className="mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Archived</p>}
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-slate-500">Number</dt>
-          <dd>
+          <dd className="flex flex-wrap items-center">
             <MaskedNumber number={c.card_number} />
+            <CopyButton value={c.card_number.replace(/\s+/g, '')} what="card number" />
           </dd>
           <dt className="text-slate-500">PIN</dt>
-          <dd>
+          <dd className="flex flex-wrap items-center">
             <MaskedPin pin={c.pin} />
+            {c.pin && <CopyButton value={c.pin} what="PIN" />}
           </dd>
           {holder && (
             <>
@@ -122,7 +122,7 @@ export function CardDetail() {
           Check balance ↗
         </button>
       )}
-      {copied && <p className="mb-2 text-center text-xs text-slate-500">Card number copied. Paste it on the balance page.</p>}
+      {copied && <p className="mb-2 text-center text-xs text-slate-500">Card number copied. Paste it on the balance page, then come back and tap Copy next to the PIN.</p>}
 
       {merchant?.auto_check && <AutoCheck card={c} />}
 
