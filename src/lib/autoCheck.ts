@@ -4,6 +4,7 @@
 export const AUTO_CHECK_PROVIDERS = {
   indigo: 'Indigo (indigo.ca)',
   sportchek: 'Sport Chek (Givex, you tick “I’m not a robot”)',
+  assisted: 'Assisted: the balance page above, you tick “I’m not a robot”',
 } as const
 
 export type AutoCheckProvider = keyof typeof AUTO_CHECK_PROVIDERS

@@ -18,6 +18,7 @@ interface Job {
   provider: string
   card_number: string
   pin: string | null
+  page_url: string | null
 }
 
 function log(msg: string) {
@@ -65,7 +66,7 @@ async function runJob(
   try {
     return await withTimeout(fetcher.assisted ? cfg.assistTimeoutMs : cfg.checkTimeoutMs, async (signal) => {
       const note = (m: string) => notes.push(m)
-      const cents = await fetcher.fetch(card, { signal, stateDir: cfg.stateDir, note, handOver })
+      const cents = await fetcher.fetch(card, { signal, stateDir: cfg.stateDir, note, handOver, pageUrl: job.page_url })
       if (!Number.isSafeInteger(cents) || cents < 0) throw new CheckError('site_changed')
       return { cents }
     })

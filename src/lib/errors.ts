@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
   cards_unique_number: 'That card number is already saved for this merchant.',
   merchants_household_name: 'A merchant with that name already exists.',
   not_supported: 'Automatic checks aren\u2019t set up for this merchant.',
+  no_balance_page: 'Add this merchant\u2019s balance check page first (Settings \u2192 Merchants).',
   in_use: 'This merchant still has cards. Move or delete them first.',
   offline: "You're offline. Changes need a connection.",
   image_too_large: 'That image is too large. Try a screenshot or a smaller photo.',

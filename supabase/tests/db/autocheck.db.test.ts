@@ -47,7 +47,9 @@ describe.skipIf(!adminUrl)('automated balance checks', () => {
     expect((await requestRow(id)).status).toBe('pending')
 
     const claimed = await claim(bot)
-    expect(claimed).toEqual([{ request_id: id, card_id: card, provider: 'indigo', card_number: '6006491234567890', pin: '1234' }])
+    expect(claimed).toEqual([
+      { request_id: id, card_id: card, provider: 'indigo', card_number: '6006491234567890', pin: '1234', page_url: null },
+    ])
     expect((await requestRow(id)).status).toBe('running')
 
     await db.as(bot, (c) => c.query('select public.complete_balance_check($1, 3210)', [id]))
@@ -179,5 +181,15 @@ describe.skipIf(!adminUrl)('automated balance checks', () => {
     expect(await request(alice, card)).not.toBe(id)
     await claim(bot)
     await db.as(bot, (c) => c.query('select public.release_balance_checks()'))
+  })
+  it('assisted checks on any merchant use its balance page, which must be set', async () => {
+    await db.as(alice, (c) => c.query(`update merchants set auto_check = 'assisted', balance_check_url = null where id = $1`, [indigo]))
+    await expect(request(alice, card)).rejects.toThrow(/no_balance_page/)
+    await db.as(alice, (c) => c.query(`update merchants set balance_check_url = 'https://balance.example/check' where id = $1`, [indigo]))
+    const id = await request(alice, card)
+    const [job] = await claim(bot)
+    expect(job).toMatchObject({ request_id: id, provider: 'assisted', page_url: 'https://balance.example/check' })
+    await db.as(bot, (c) => c.query(`select public.complete_balance_check($1, null, 'cancelled')`, [id]))
+    await expect(db.as(alice, (c) => c.query(`update merchants set auto_check = 'esso' where id = $1`, [indigo]))).rejects.toThrow(/check constraint/)
   })
 })

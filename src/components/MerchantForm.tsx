@@ -37,6 +37,10 @@ export function MerchantForm({
       setUrlError('Must start with https://')
       return
     }
+    if (autoCheck === 'assisted' && !trimmed) {
+      setUrlError('Assisted checks open the balance check page: add it above.')
+      return
+    }
     setUrlError('')
     const input = { name, category, color, balanceCheckUrl: trimmed, autoCheck: autoCheck || null }
     try {

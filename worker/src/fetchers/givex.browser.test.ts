@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { chromium, type Page } from 'playwright'
-import { givexFetcher } from './givex'
+import { anyMerchantFetcher, assistedFetcher } from './givex'
 import { Viewer } from '../viewer'
 
 // Drives the assisted Givex check (real Chromium) against a local imitation of a Givex
@@ -90,7 +90,7 @@ describe.skipIf(!canRun)('assisted Givex check with the live view', () => {
 
   /** Runs a check; `person` gets the live-view link and the page (only to find where things are). */
   async function run(card: { cardNumber: string; pin: string | null }, person: (link: string, page: Page) => Promise<void>) {
-    const fetcher = givexFetcher('test', () => pageUrl)
+    const fetcher = assistedFetcher('test', () => pageUrl)
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 30_000)
     let personDone: Promise<void> = Promise.resolve()
@@ -182,14 +182,14 @@ describe.skipIf(!canRun)('assisted Givex check with the live view', () => {
 
   it('needs the live view to be configured', async () => {
     await expect(
-      givexFetcher('test', () => pageUrl).fetch(GOOD, { signal: new AbortController().signal, stateDir: '/x' }),
+      assistedFetcher('test', () => pageUrl).fetch(GOOD, { signal: new AbortController().signal, stateDir: '/x' }),
     ).rejects.toMatchObject({ code: 'no_viewer' })
   })
   it('reports a refused balance form as blocked, without handing over', async () => {
     let handedOver = false
     const base = pageUrl.replace('/balcheck', '')
     await expect(
-      givexFetcher('test', () => `${base}/refused`).fetch(GOOD, {
+      assistedFetcher('test', () => `${base}/refused`).fetch(GOOD, {
         signal: new AbortController().signal,
         stateDir: '/x',
         handOver: async () => {
@@ -198,5 +198,19 @@ describe.skipIf(!canRun)('assisted Givex check with the live view', () => {
       }),
     ).rejects.toMatchObject({ code: 'blocked' })
     expect(handedOver).toBe(false)
+  }, 60_000)
+  it('any merchant: opens the balance page saved for it in the app', async () => {
+    // The refused test page only exists here, so "blocked" proves it opened this page.
+    await expect(
+      anyMerchantFetcher.fetch(GOOD, {
+        signal: new AbortController().signal,
+        stateDir: '/x',
+        pageUrl: pageUrl.replace('/balcheck', '/refused'),
+        handOver: async () => {},
+      }),
+    ).rejects.toMatchObject({ code: 'blocked' })
+    await expect(
+      anyMerchantFetcher.fetch(GOOD, { signal: new AbortController().signal, stateDir: '/x', pageUrl: null, handOver: async () => {} }),
+    ).rejects.toMatchObject({ code: 'not_supported' })
   }, 60_000)
 })

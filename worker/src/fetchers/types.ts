@@ -13,6 +13,8 @@ export interface FetchContext {
   stateDir: string
   /** Progress notes for the worker log (timings, step names). Never pass card data. */
   note?: (message: string) => void
+  /** The merchant's balance page (merchants.balance_check_url), if set. */
+  pageUrl?: string | null
   /**
    * Assisted checks only: show `page` to a person through the live view and tell the
    * app it's their turn. Absent when the live view isn't configured (VIEWER_PUBLIC_URL).
