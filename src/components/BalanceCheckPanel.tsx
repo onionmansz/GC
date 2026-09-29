@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CopyButton, MaskedNumber, MaskedPin } from './ui'
 import { useOnline } from '../lib/queryClient'
+import { opensInBrowser, setOpensInBrowser } from '../lib/prefs'
 
 /**
  * The merchant's balance-check page shown inside the app (full-screen panel), with the
@@ -8,6 +9,7 @@ import { useOnline } from '../lib/queryClient'
  * refuse to load inside another site, so "Open in browser" is always offered.
  */
 export function BalanceCheckPanel({
+  merchantId,
   merchantName,
   url,
   cardNumber,
@@ -15,6 +17,7 @@ export function BalanceCheckPanel({
   onClose,
   onSetBalance,
 }: {
+  merchantId: string
   merchantName: string
   url: string
   cardNumber: string
@@ -24,6 +27,7 @@ export function BalanceCheckPanel({
 }) {
   const online = useOnline()
   const [loaded, setLoaded] = useState(false)
+  const [alwaysBrowser, setAlwaysBrowser] = useState(() => opensInBrowser(merchantId))
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -70,7 +74,8 @@ export function BalanceCheckPanel({
               title={`${merchantName} balance check page`}
               src={url}
               className="absolute inset-0 h-full w-full border-0"
-              referrerPolicy="no-referrer"
+              // Default referrer policy: the merchant sees only this app's address (no path).
+              // Hiding it entirely may look more suspicious to some bot-protection systems.
               // Enough for the merchant's form and its "I'm not a robot" check, nothing more.
               sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               onLoad={() => setLoaded(true)}
@@ -87,11 +92,22 @@ export function BalanceCheckPanel({
           Set balance
         </button>
         <p className="mt-2 text-center text-xs text-slate-500">
-          Page blank or not working?{' '}
+          Blank, “403 Forbidden” or not working?{' '}
           <a href={url} target="_blank" rel="noopener noreferrer" className="underline">
             Open in browser ↗
           </a>
         </p>
+        <label className="mt-1 flex items-center justify-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={alwaysBrowser}
+            onChange={(e) => {
+              setAlwaysBrowser(e.target.checked)
+              setOpensInBrowser(merchantId, e.target.checked)
+            }}
+          />
+          Always open {merchantName} in the browser on this device
+        </label>
       </div>
     </div>
   )

@@ -22,6 +22,7 @@ import { checkFailureMessage, isStalePending } from '../lib/autoCheck'
 import { CopyButton, EmptyState, ErrorText, MaskedNumber, MaskedPin, MerchantDot, MoneyInput, Page, Sheet, Splash } from '../components/ui'
 import { copyText } from '../lib/clipboard'
 import { BalanceCheckPanel } from '../components/BalanceCheckPanel'
+import { opensInBrowser, setOpensInBrowser } from '../lib/prefs'
 
 type Action = 'spend' | 'load' | 'set'
 
@@ -35,6 +36,7 @@ export function CardDetail() {
   const online = useOnline()
   const [action, setAction] = useState<Action | null>(null)
   const [checking, setChecking] = useState(false)
+  const [copiedHint, setCopiedHint] = useState(false)
 
   if (card.isPending) return <Splash />
   if (!card.data) {
@@ -52,7 +54,12 @@ export function CardDetail() {
     if (!merchant?.balance_check_url) return
     // Copy inside the tap (iOS requires it) so the number is ready to paste on the page.
     void copyText(c.card_number.replace(/\s+/g, ''))
-    setChecking(true)
+    if (opensInBrowser(merchant.merchant_id)) {
+      window.open(merchant.balance_check_url, '_blank', 'noopener,noreferrer')
+      setCopiedHint(true)
+    } else {
+      setChecking(true)
+    }
   }
 
   return (
@@ -124,8 +131,25 @@ export function CardDetail() {
         </button>
       )}
 
+      {copiedHint && merchant && (
+        <p className="mb-2 text-center text-xs text-slate-500" data-testid="opened-in-browser">
+          Card number copied. Paste it on {merchant.name}'s page; come back here to copy the PIN.{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setOpensInBrowser(merchant.merchant_id, false)
+              setCopiedHint(false)
+            }}
+          >
+            Open inside the app next time
+          </button>
+        </p>
+      )}
+
       {checking && merchant?.balance_check_url && (
         <BalanceCheckPanel
+          merchantId={merchant.merchant_id}
           merchantName={merchant.name}
           url={merchant.balance_check_url}
           cardNumber={c.card_number}
