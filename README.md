@@ -187,6 +187,14 @@ docker compose cp indigo-session.json balance-worker:/app/state/indigo-session.j
 If you tap the button and it stays on "Queued…", the app tells you the worker doesn't
 seem to be running.
 
+**If checks fail with "the balance page has changed",** run the diagnostic. It opens Indigo's
+page exactly like a check does but types nothing, prints what it sees (page address, form
+fields), and saves a screenshot:
+```bash
+docker compose run --rm balance-worker npm run debug-indigo
+docker compose cp balance-worker:/app/state/debug-indigo.png .
+```
+
 ### Adding another merchant
 
 Write a fetcher in `worker/src/fetchers/` (card number + PIN → cents, or throw a
