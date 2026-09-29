@@ -1,14 +1,13 @@
 import { writeFile } from 'node:fs/promises'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { chromium, type Browser } from 'playwright'
 import { loadConfig, type Config } from './config'
 import { CheckError, errorCodeOf } from './errors'
-import { getFetcher, usesBrowser } from './fetchers/index'
+import { getFetcher } from './fetchers/index'
 
 // Balance-check worker. Signs in as the household's "Auto-check" service member
 // (email + password, ordinary user: RLS applies), polls for queued checks, runs the
-// merchant's fetcher and reports the result. Logs contain request ids and outcome
+// merchant's lookup and reports the result. Logs contain request ids and outcome
 // codes only; never card numbers, PINs or page content.
 
 interface Job {
@@ -45,18 +44,14 @@ async function withTimeout<T>(ms: number, run: (signal: AbortSignal) => Promise<
 async function runJob(job: Job, cfg: Config): Promise<{ cents: number } | { error: string }> {
   const fetcher = getFetcher(job.provider)
   if (!fetcher) return { error: 'not_supported' }
-  let browser: Browser | null = null
   try {
     return await withTimeout(cfg.checkTimeoutMs, async (signal) => {
-      if (usesBrowser()) browser = await chromium.launch({ executablePath: cfg.chromiumPath })
-      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { browser: browser!, signal })
+      const cents = await fetcher.fetch({ cardNumber: job.card_number, pin: job.pin }, { signal, fetch: globalThis.fetch })
       if (!Number.isSafeInteger(cents) || cents < 0) throw new CheckError('site_changed')
       return { cents }
     })
   } catch (err) {
     return { error: errorCodeOf(err) }
-  } finally {
-    await (browser as Browser | null)?.close().catch(() => {})
   }
 }
 

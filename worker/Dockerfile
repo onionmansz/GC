@@ -1,6 +1,5 @@
-# Balance-check worker. The Playwright image ships Chromium and its system libraries;
-# its version must match the "playwright" dependency in package.json.
-FROM mcr.microsoft.com/playwright:v1.63.0-noble
+# Balance-check worker: small Node image, no browser needed.
+FROM node:22-slim
 
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -12,7 +11,7 @@ COPY tsconfig.json ./
 COPY src ./src
 
 # Run as the image's unprivileged user.
-USER pwuser
+USER node
 
 # Healthy while the poll loop is alive (heartbeat written every poll).
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s \

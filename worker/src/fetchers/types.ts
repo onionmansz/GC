@@ -1,5 +1,3 @@
-import type { Browser } from 'playwright'
-
 /** The card fields a fetcher may use. Never log these. */
 export interface FetchableCard {
   cardNumber: string
@@ -7,13 +5,14 @@ export interface FetchableCard {
 }
 
 export interface FetchContext {
-  browser: Browser
   /** Aborts when the check exceeds its time limit. */
   signal: AbortSignal
+  /** HTTP client (global fetch in production; stubbed in tests). */
+  fetch: typeof globalThis.fetch
 }
 
 /**
- * Looks up a card's balance on a merchant's website.
+ * Looks up a card's balance with the merchant.
  * Resolve with cents, or throw a CheckError with a code the app can explain.
  */
 export interface BalanceFetcher {

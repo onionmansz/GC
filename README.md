@@ -5,7 +5,7 @@ track balances, and show a scannable barcode at the till.
 
 - **Frontend:** Vite + React + TypeScript, Tailwind, TanStack Query (persisted to IndexedDB for offline).
 - **Backend:** Supabase: Postgres with row-level security, Auth (email + password, invite-only), private Storage.
-- **Auto-check worker:** optional Docker container (`worker/`) that checks balances on merchant sites.
+- **Auto-check worker:** optional Docker container (`worker/`) that checks balances with the merchant.
 - **Barcodes:** decoded on-device with `zxing-wasm`, rendered with `bwip-js`.
 - **Hosting:** Render static site (`render.yaml`).
 
@@ -126,17 +126,20 @@ time they open the app; if you're signed out, use **Forgot password?**.
 
 The **Check balance now (automatic)** button on a card queues a request. A small worker
 running on your own server (Docker) picks it up within a few seconds, looks the balance
-up on the merchant's website with a headless browser, and records it. It shows in the
+up with the merchant, and records it. It shows in the
 card's history as **Balance set · Auto-check**.
 
-- **Supported merchants:** Indigo. ⚠️ **Status:** the Indigo lookup itself isn't written yet
-  (see `worker/src/fetchers/indigo.ts`); until it is, checks end with "not set up" and record
-  nothing. Everything else (button, queue, worker, ledger) is in place and tested.
+- **Supported merchants:** Indigo. Indigo's cards are processed by Givex; the worker makes the
+  same single request Indigo's own gift card page makes
+  (`givex-integration.discolabs.com/api/v1/balance.json`, card number only; no PIN, login
+  or browser). If Indigo changes how its page works, checks fail with "the balance page has
+  changed" and record nothing; they never record a guessed amount.
 - **How the worker signs in:** it uses its own ordinary account, a household member marked
   as a service account, with email + password. It never has the Supabase service_role key,
   so row-level security still limits it to your household. It is hidden from "Who has it?".
-- **Privacy:** card numbers and PINs go only from Supabase to the merchant's site. The worker
-  logs request ids and outcome codes, never card data.
+- **Privacy:** the card number goes only from Supabase to the merchant's processor (for Indigo,
+  exactly as Indigo's site sends it). The PIN isn't sent. The worker logs request ids and
+  outcome codes, never card data.
 
 ### Setup
 
@@ -163,5 +166,5 @@ seem to be running.
 ### Adding another merchant
 
 Write a fetcher in `worker/src/fetchers/` (card number + PIN → cents, or throw a
-`CheckError` code), register it in `worker/src/fetchers/index.ts`, add its id to the
+`CheckError` code; see `indigo.ts`), register it in `worker/src/fetchers/index.ts`, add its id to the
 `merchants.auto_check` check constraint (new migration) and to `src/lib/autoCheck.ts`.

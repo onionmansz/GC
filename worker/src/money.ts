@@ -1,12 +1,12 @@
 /**
- * Parse a balance shown on a merchant page ("$1,234.56", "CA$ 12.00", "$0") into cents.
- * Returns null unless the text contains exactly one dollar amount, so an ambiguous page
- * never records a wrong balance.
+ * A plain amount from an API ("12.34", "12.3", 12.34, "1,234.00") → cents, parsed on
+ * the digits (no floating point). Null if it isn't a non-negative amount.
  */
-export function parseBalanceText(text: string): number | null {
-  const matches = [...text.matchAll(/(?:CA)?\$\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?(?!\d)/g)]
-  if (matches.length !== 1) return null
-  const [, dollars, cents = '00'] = matches[0]
-  const value = Number(dollars.replaceAll(',', '')) * 100 + Number(cents)
-  return Number.isSafeInteger(value) ? value : null
+export function parseAmountToCents(value: string | number): number | null {
+  const s = (typeof value === 'number' ? value.toFixed(2) : value).trim().replace(/^\$/, '').replaceAll(',', '')
+  const m = /^(\d+)(?:\.(\d{1,2})0*)?$/.exec(s)
+  if (!m) return null
+  const [, dollars, frac = ''] = m
+  const cents = Number(dollars) * 100 + Number(frac.padEnd(2, '0'))
+  return Number.isSafeInteger(cents) ? cents : null
 }

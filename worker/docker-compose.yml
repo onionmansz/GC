@@ -5,8 +5,6 @@ services:
     container_name: giftcard-balance-worker
     restart: unless-stopped
     env_file: .env
-    # Chromium needs a larger /dev/shm than Docker's 64 MB default.
-    shm_size: 512mb
     # No ports: the worker only makes outgoing connections.
     logging:
       driver: json-file

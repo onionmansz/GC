@@ -6,7 +6,6 @@ export interface Config {
   pollIntervalMs: number
   checkTimeoutMs: number
   heartbeatFile: string
-  chromiumPath: string | undefined
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -18,8 +17,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     email: env.WORKER_EMAIL!,
     password: env.WORKER_PASSWORD!,
     pollIntervalMs: Number(env.POLL_INTERVAL_SECONDS ?? 5) * 1000,
-    checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 90) * 1000,
+    checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 30) * 1000,
     heartbeatFile: env.HEARTBEAT_FILE ?? '/tmp/worker-heartbeat',
-    chromiumPath: env.CHROMIUM_PATH || undefined,
   }
 }
