@@ -117,4 +117,51 @@ describe.skipIf(!adminUrl)('automated balance checks', () => {
     expect(row.status).toBe('failed')
     expect(row.error_code).toBe('timeout')
   })
+  it('assisted checks: the worker hands over with a live-view link, then completes', async () => {
+    await db.as(alice, (c) => c.query(`update merchants set auto_check = 'sportchek' where id = $1`, [indigo]))
+    const id = await request(alice, card)
+    const [job] = await claim(bot)
+    expect(job.provider).toBe('sportchek')
+
+    // Only the service member can publish the link.
+    await expect(
+      db.as(alice, (c) => c.query(`select public.await_user_balance_check($1, 'http://evil.example/')`, [id])),
+    ).rejects.toThrow(/not_found/)
+    await expect(
+      db.as(bot, (c) => c.query(`select public.await_user_balance_check($1, 'javascript:alert(1)')`, [id])),
+    ).rejects.toThrow(/check constraint/)
+    await db.as(bot, (c) => c.query(`select public.await_user_balance_check($1, 'http://192.168.1.5:8787/v/tok')`, [id]))
+    let row = await requestRow(id)
+    expect(row.status).toBe('awaiting_user')
+
+    // Members see it; tapping again returns the same request.
+    const seen = await db.as(alice, async (c) => (await c.query('select viewer_url from balance_check_requests where id = $1', [id])).rows)
+    expect(seen).toEqual([{ viewer_url: 'http://192.168.1.5:8787/v/tok' }])
+    expect(await request(alice, card)).toBe(id)
+    expect(await claim(bot)).toEqual([])
+
+    await db.as(bot, (c) => c.query('select public.complete_balance_check($1, 2500)', [id]))
+    row = await requestRow(id)
+    expect(row.status).toBe('done')
+    expect(row.viewer_url).toBeNull()
+    expect(await balance(card)).toBe(2500)
+    await expect(
+      db.as(bot, (c) => c.query(`select public.await_user_balance_check($1, 'http://x/')`, [id])),
+    ).rejects.toThrow(/not_running/)
+  })
+
+  it('fails requests left waiting for a person for 15 minutes', async () => {
+    const id = await request(alice, card)
+    await claim(bot)
+    await db.as(bot, (c) => c.query(`select public.await_user_balance_check($1, 'http://192.168.1.5:8787/v/tok')`, [id]))
+    await db.admin.query(`update balance_check_requests set started_at = now() - interval '10 minutes' where id = $1`, [id])
+    await claim(bot)
+    expect((await requestRow(id)).status).toBe('awaiting_user')
+    await db.admin.query(`update balance_check_requests set started_at = now() - interval '16 minutes' where id = $1`, [id])
+    await claim(bot)
+    const row = await requestRow(id)
+    expect(row.status).toBe('failed')
+    expect(row.error_code).toBe('timeout')
+    expect(row.viewer_url).toBeNull()
+  })
 })

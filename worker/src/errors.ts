@@ -10,6 +10,8 @@ export type CheckErrorCode =
   | 'not_supported' // no fetcher for this provider
   | 'relink_needed' // the saved merchant sign-in expired; re-run the link command
   | 'missing_pin' // the merchant needs the PIN and the card has none
+  | 'no_viewer' // an assisted check needs VIEWER_PUBLIC_URL (the live view) configured
+  | 'cancelled' // the person cancelled an assisted check in the live view
   | 'unknown'
 
 export class CheckError extends Error {

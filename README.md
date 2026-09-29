@@ -30,7 +30,7 @@ Never put production keys in `.env.local`. Production values live only in Render
 | `npm test` | Unit tests (balance math, adjust delta, cents formatting, auto-archive, redaction) |
 | `npm run test:db` | Applies every migration to a throwaway Postgres and tests RLS, RPCs and the ledger trigger. Needs `TEST_DATABASE_URL` (any Postgres ≥ 15; no Docker or Supabase required) |
 | `npm run test:rls` | RLS + Storage against a live Supabase stack (see below) |
-| `npm run test:e2e` | Playwright: invite → choose password → add card → spend → till barcode; password sign-in and reset; auto-check round trip through the real worker; offline cold start |
+| `npm run test:e2e` | Playwright: invite → choose password → add card → spend → till barcode; password sign-in and reset; auto-check round trip through the real worker; assisted check (live-view link → Done); offline cold start |
 | `cd worker && npm test` | Worker unit tests |
 
 `test:rls` and `test:e2e` need `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON_KEY` and
@@ -129,7 +129,8 @@ running on your own server (Docker) picks it up within a few seconds, looks the 
 up with the merchant, and records it. It shows in the card's history as
 **Balance set · Auto-check**.
 
-- **Supported merchants: Indigo.** Indigo only shows balances to a signed-in Indigo account
+- **Supported merchants: Indigo** (fully automatic) and **Sport Chek** (assisted: you tick
+  "I'm not a robot" in a live view; see [Assisted checks](#assisted-checks-sport-chek)). Indigo only shows balances to a signed-in Indigo account
   (account.indigo.ca → Gift Cards). So the worker keeps its own saved sign-in to *your*
   Indigo account, opens that page in a hidden browser, types the card number and PIN, and
   reads Indigo's reply (`{"success":true,"balance":…}`). It never records a guessed amount:
@@ -171,7 +172,8 @@ up with the merchant, and records it. It shows in the card's history as
    docker compose up -d
    docker compose logs -f      # should say "signed in"
    ```
-   It only makes outgoing connections (no ports to open). `docker ps` shows it as
+   Apart from the live view for assisted checks (below), it only makes outgoing
+   connections. `docker ps` shows it as
    *healthy* while it's running. Update later with `git pull && docker compose up -d --build`.
 
 **If linking on the server fails** (e.g. Indigo shows a "prove you're human" check), link
@@ -198,6 +200,35 @@ docker compose cp balance-worker:/app/state/debug-indigo.png .
 ```
 Add `-- --try-fake-card` to also submit an obviously fake card (0000…/0000) exactly like
 a check and report the requests sent and Indigo's reply (screenshot: `debug-indigo-after.png`).
+
+### Assisted checks (Sport Chek)
+
+Sport Chek's balance page (Givex) makes you tick **"I'm not a robot"**, sometimes with
+a picture puzzle. That has to be done by a person, so these checks are *assisted*:
+
+1. Tap **Check balance now** on the card.
+2. The worker opens Sport Chek's page on your server and fills in the card number and PIN.
+3. The app shows **"Your turn: finish the robot check"**. Tap it: a live view of that
+   page opens. Tap "I'm not a robot" (and solve any puzzle), then tap the page's
+   balance button. Drag to scroll; **Type card number / Type PIN** type them for you if
+   a field is empty.
+4. The worker reads the balance and saves it. The live view says **Done!**; go back to
+   the app. Nobody finishing within 5 minutes cancels the check (`ASSIST_TIMEOUT_SECONDS`).
+
+**Setup:** in `worker/.env` set `VIEWER_PUBLIC_URL` to the address your phone uses to
+reach the server on port 8787, then `docker compose up -d --build`, and in the app set
+**Settings → Merchants → Sport Chek → Automatic balance check → Sport Chek**.
+
+- **Only at home:** use the server's home-network address, e.g.
+  `VIEWER_PUBLIC_URL=http://192.168.1.20:8787`. Works while your phone is on home Wi-Fi.
+- **Anywhere (Tailscale):** install Tailscale on the server and both phones, signed in to
+  the same Tailscale account. Use the server's Tailscale address, e.g.
+  `VIEWER_PUBLIC_URL=http://100.101.102.103:8787` (Tailscale admin → Machines) or its
+  MagicDNS name (`http://homeserver:8787`). Works wherever the phone has Tailscale on.
+
+**Never forward port 8787 on your router.** The live view shows the filled-in form (card
+number included). Each link works only for its own check, dies when the check ends, and
+never carries the card number or PIN itself. Still, keep it on your home network or Tailscale.
 
 ### Adding another merchant
 

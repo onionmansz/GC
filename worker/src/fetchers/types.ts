@@ -1,3 +1,5 @@
+import type { Page } from 'playwright'
+
 /** The card fields a fetcher may use. Never log these. */
 export interface FetchableCard {
   cardNumber: string
@@ -11,6 +13,11 @@ export interface FetchContext {
   stateDir: string
   /** Progress notes for the worker log (timings, step names). Never pass card data. */
   note?: (message: string) => void
+  /**
+   * Assisted checks only: show `page` to a person through the live view and tell the
+   * app it's their turn. Absent when the live view isn't configured (VIEWER_PUBLIC_URL).
+   */
+  handOver?: (page: Page) => Promise<void>
 }
 
 /**
@@ -20,5 +27,7 @@ export interface FetchContext {
 export interface BalanceFetcher {
   /** Matches merchants.auto_check. */
   readonly provider: string
+  /** Needs a person to finish (robot check): gets the longer ASSIST_TIMEOUT_SECONDS. */
+  readonly assisted?: boolean
   fetch(card: FetchableCard, ctx: FetchContext): Promise<number>
 }

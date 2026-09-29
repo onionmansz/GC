@@ -3,7 +3,7 @@ import { supabase, IMAGE_BUCKET } from '../lib/supabase'
 import { signedAmount } from '../lib/ledger'
 import type { BarcodeFormat } from '../lib/barcode/formats'
 import type { BalanceCheck, Card, CardWithBalance, Household, Invite, Member, MerchantSummary, Transaction } from './types'
-import type { AutoCheckProvider } from '../lib/autoCheck'
+import { isActiveCheck, type AutoCheckProvider } from '../lib/autoCheck'
 import { useAuth } from '../auth/AuthProvider'
 
 // Query keys contain only ids — never card numbers or PINs.
@@ -441,7 +441,7 @@ export function useLatestBalanceCheck(cardId: string, enabled: boolean) {
       const row = unwrap(
         await supabase
           .from('balance_check_requests')
-          .select('id, status, result_cents, error_code, created_at, finished_at')
+          .select('id, status, result_cents, error_code, created_at, finished_at, viewer_url')
           .eq('card_id', cardId)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -452,10 +452,7 @@ export function useLatestBalanceCheck(cardId: string, enabled: boolean) {
       if (justFinished) await invalidate(cardId)
       return row && { ...row, result_cents: row.result_cents === null ? null : Number(row.result_cents) }
     },
-    refetchInterval: (q) => {
-      const s = q.state.data?.status
-      return s === 'pending' || s === 'running' ? 2000 : false
-    },
+    refetchInterval: (q) => (isActiveCheck(q.state.data?.status) ? 2000 : false),
     staleTime: 0,
   })
 }

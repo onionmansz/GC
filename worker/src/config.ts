@@ -7,6 +7,11 @@ export interface Config {
   checkTimeoutMs: number
   heartbeatFile: string
   stateDir: string
+  /** Assisted checks: address phones use to reach the live view (e.g. http://192.168.1.20:8787). */
+  viewerPublicUrl: string | null
+  viewerPort: number
+  /** Assisted checks wait this long for a person to finish the robot check. */
+  assistTimeoutMs: number
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -21,6 +26,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     checkTimeoutMs: Number(env.CHECK_TIMEOUT_SECONDS ?? 120) * 1000,
     heartbeatFile: env.HEARTBEAT_FILE ?? '/tmp/worker-heartbeat',
     stateDir: loadStateDir(env),
+    viewerPublicUrl: env.VIEWER_PUBLIC_URL?.trim().replace(/\/+$/, '') || null,
+    viewerPort: Number(env.VIEWER_PORT ?? 8787),
+    assistTimeoutMs: Number(env.ASSIST_TIMEOUT_SECONDS ?? 300) * 1000,
   }
 }
 

@@ -66,6 +66,8 @@ export interface BalanceCheck {
   error_code: string | null
   created_at: string
   finished_at: string | null
+  /** Live-view link while status is 'awaiting_user' (assisted checks). */
+  viewer_url: string | null
 }
 
 export interface Invite {
