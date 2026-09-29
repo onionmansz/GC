@@ -148,6 +148,13 @@ test('add card → spend → balance updates → show-at-till renders barcode', 
   expect(darkRatio).toBeGreaterThan(0.2)
   expect(darkRatio).toBeLessThan(0.8)
 
+  // If a redrawn barcode ever won't scan, the original upload can be shown instead.
+  await page.getByTestId('barcode-toggle').click()
+  await expect(page.getByTestId('barcode-image')).toBeVisible()
+  await expect(page.getByTestId('barcode-canvas')).toHaveCount(0)
+  await page.getByTestId('barcode-toggle').click()
+  await expect(page.getByTestId('barcode-canvas')).toHaveAttribute('data-rendered', 'true')
+
   // Sign out, then back in with the password.
   await page.getByRole('button', { name: 'Done' }).click()
   await page.goto('/settings')
