@@ -27,9 +27,16 @@ customElements.define('gc-balance', class extends HTMLElement {
     const root = this.attachShadow({ mode: 'open' })
     root.innerHTML = '<input placeholder="Gift Card Number"><input placeholder="Gift Card PIN"><button>Check Balance</button><p id=out></p>'
     const [num, pin] = root.querySelectorAll('input')
+    // Like Shopify extension fields: values are committed on change (leaving the field),
+    // not while typing. An empty field sends no request at all.
+    const committed = { number: '', pin: '' }
+    num.addEventListener('change', () => { committed.number = num.value })
+    pin.addEventListener('change', () => { committed.pin = pin.value })
     worker.onmessage = (e) => { root.getElementById('out').textContent = e.data }
-    // Render late, like the real extension.
-    root.querySelector('button').onclick = () => worker.postMessage({ number: num.value, pin: pin.value })
+    root.querySelector('button').onclick = () => {
+      if (!committed.number || !committed.pin) return
+      worker.postMessage({ ...committed })
+    }
   }
 })
 </script></body></html>`

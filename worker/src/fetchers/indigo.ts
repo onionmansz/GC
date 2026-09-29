@@ -21,7 +21,6 @@ export const INDIGO_BALANCE_PAGE =
   process.env.INDIGO_BALANCE_PAGE_URL ?? 'https://account.indigo.ca/pages/019b9e7d-e4be-7cc7-9bfa-c78e1c026c2d?locale=en'
 export const INDIGO_BALANCE_API = process.env.INDIGO_BALANCE_API_URL ?? 'https://indigo-shopify-prd.fly.dev/api/givex/balance'
 
-const STEP_TIMEOUT_MS = 30_000
 /** The balance form can take a while to appear on a cold, headless load. */
 const FORM_TIMEOUT_MS = 90_000
 
@@ -105,6 +104,33 @@ export async function waitForFormOrLogin(page: Page, timeoutMs = FORM_TIMEOUT_MS
   throw new CheckError('site_changed')
 }
 
+/** Resolves with Indigo's balance service reply (from any page, frame or worker). */
+export function waitForBalanceReply(context: BrowserContext, timeoutMs = 45_000) {
+  return context.waitForEvent('response', {
+    predicate: (r) => r.url().startsWith(INDIGO_BALANCE_API) && r.request().method() === 'POST',
+    timeout: timeoutMs,
+  })
+}
+
+/**
+ * Type like a person and leave each field before clicking. Shopify extension fields
+ * commit their value to the extension on change/blur; filling and clicking instantly can
+ * submit an empty form, so no request is ever sent.
+ */
+export async function submitBalanceForm(page: Page, form: BalanceForm, cardNumber: string, pin: string): Promise<void> {
+  for (const [field, value] of [
+    [form.number, cardNumber.replace(/\s+/g, '')],
+    [form.pin, pin],
+  ] as const) {
+    await field.click()
+    await field.fill('')
+    await field.pressSequentially(value, { delay: 40 })
+    await field.press('Tab')
+    await page.waitForTimeout(300)
+  }
+  await form.submit.click()
+}
+
 /**
  * Indigo's balance service reply → cents, using the same rules as its page.
  * Observed: success → 200 {"success":true,"balance":39.54,"error":null};
@@ -185,13 +211,9 @@ export const indigoFetcher: BalanceFetcher = {
       }
       note(`form ${secs()}`)
 
-      const reply = context.waitForEvent('response', {
-        predicate: (r) => r.url().startsWith(INDIGO_BALANCE_API) && r.request().method() === 'POST',
-        timeout: STEP_TIMEOUT_MS,
-      })
-      await form.number.fill(card.cardNumber.replace(/\s+/g, ''))
-      await form.pin.fill(card.pin)
-      await form.submit.click()
+      const reply = waitForBalanceReply(context)
+      await submitBalanceForm(page, form, card.cardNumber, card.pin)
+      note(`submitted ${secs()}`)
       const res = await reply.catch(() => {
         note(`no balance reply after ${secs()}`)
         throw new CheckError('site_changed')

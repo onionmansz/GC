@@ -196,6 +196,8 @@ appear and what's on the page, and saves a screenshot:
 docker compose run --rm balance-worker npm run debug-indigo
 docker compose cp balance-worker:/app/state/debug-indigo.png .
 ```
+Add `-- --try-fake-card` to also submit an obviously fake card (0000…/0000) exactly like
+a check and report the requests sent and Indigo's reply (screenshot: `debug-indigo-after.png`).
 
 ### Adding another merchant
 
