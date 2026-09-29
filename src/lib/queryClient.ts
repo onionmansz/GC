@@ -4,8 +4,13 @@ import { del, get, set } from 'idb-keyval'
 import { useSyncExternalStore } from 'react'
 
 const DAY = 24 * 60 * 60 * 1000
-export const CACHE_MAX_AGE = 30 * DAY
+// Must stay below setTimeout's ~24.8-day limit: TanStack uses it for gcTime, and an
+// overflowing value fires immediately, garbage-collecting the restored offline cache.
+export const CACHE_MAX_AGE = 14 * DAY
 const CACHE_KEY = 'wallet-query-cache'
+
+// TanStack assumes "online" at startup; respect the real state on a cold offline launch.
+if (typeof navigator !== 'undefined' && navigator.onLine === false) onlineManager.setOnline(false)
 
 export const queryClient = new QueryClient({
   defaultOptions: {

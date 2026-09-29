@@ -8,7 +8,7 @@ const LAST_USER_KEY = 'wallet.lastUserId'
 interface AuthState {
   status: 'loading' | 'signedIn' | 'signedOut'
   userId: string | undefined
-  /** Offline with an expired session: cached data is shown read-only until reconnect. */
+  /** Offline (or auth unreachable) without a live session: cached data is shown until reconnect. */
   offlineOnly: boolean
   email: string | undefined
   signOut: () => Promise<void>
@@ -36,7 +36,15 @@ function writeLastUser(id: string | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [slow, setSlow] = useState(false)
   const online = useOnline()
+
+  // On a weak or absent connection supabase-js can take a long time to settle the
+  // session. Don't block the (cached) wallet on it: fall back after a short wait.
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 1500)
+    return () => clearTimeout(t)
+  }, [])
 
   useEffect(() => {
     const handle = async (next: Session | null) => {
@@ -62,15 +70,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<AuthState>(() => {
-    const cachedUser = !session && !online ? readLastUser() : null
+    const cachedUser = !session && (!online || (loading && slow)) ? readLastUser() : null
     return {
-      status: loading ? 'loading' : session || cachedUser ? 'signedIn' : 'signedOut',
+      status: session || cachedUser ? 'signedIn' : loading ? 'loading' : 'signedOut',
       userId: session?.user.id ?? cachedUser ?? undefined,
       offlineOnly: Boolean(cachedUser),
       email: session?.user.email,
       signOut,
     }
-  }, [loading, session, online, signOut])
+  }, [loading, slow, session, online, signOut])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
