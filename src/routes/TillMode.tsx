@@ -44,7 +44,7 @@ export function TillMode() {
 
       <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-6">
         <Barcode card={c} />
-        <p className="font-mono text-3xl font-bold tracking-wider break-all text-center sm:text-4xl" data-testid="till-card-number">
+        <p className="text-center font-mono text-[clamp(1.25rem,7.2vw,2.5rem)] font-bold tracking-wider" data-testid="till-card-number">
           {groupCardNumber(c.card_number)}
         </p>
         {c.pin && (
