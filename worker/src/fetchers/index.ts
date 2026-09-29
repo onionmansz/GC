@@ -1,10 +1,10 @@
 import { CheckError, type CheckErrorCode } from '../errors'
 import { chromium } from 'playwright'
-import { sportchekFetcher } from './givex'
+import { anyMerchantFetcher, sportchekFetcher } from './givex'
 import { indigoFetcher } from './indigo'
 import type { BalanceFetcher } from './types'
 
-const fetchers: readonly BalanceFetcher[] = [indigoFetcher, sportchekFetcher]
+const fetchers: readonly BalanceFetcher[] = [indigoFetcher, sportchekFetcher, anyMerchantFetcher]
 
 /**
  * Test hook: WORKER_FAKE_BALANCE_CENTS / WORKER_FAKE_ERROR make every provider return a

@@ -2,10 +2,11 @@ import { chromium, type Browser, type Frame, type Page } from 'playwright'
 import { CheckError } from '../errors'
 import { parseAmountToCents } from '../money'
 import { desktopUserAgent } from './indigo'
-import type { BalanceFetcher, FetchableCard } from './types'
+import type { BalanceFetcher, FetchableCard, FetchContext } from './types'
 
 /**
- * Assisted checks on Givex balance pages (Sport Chek and others).
+ * Assisted checks: Sport Chek (Givex), and any merchant set to 'assisted', which uses
+ * the merchant's own balance page from the app.
  *
  * The page asks for an "I'm not a robot" check, which a person has to do. The worker
  * opens the page, fills in the card, then hands the live page to a person (see
@@ -117,12 +118,14 @@ export async function waitForResult(page: Page, signal: AbortSignal, baseline: S
   throw new CheckError('timeout')
 }
 
-export function givexFetcher(provider: string, pageUrl: () => string): BalanceFetcher {
+export function assistedFetcher(provider: string, pageUrl: (ctx: FetchContext) => string | null | undefined): BalanceFetcher {
   return {
     provider,
     assisted: true,
     async fetch(card, ctx) {
       if (!ctx.handOver) throw new CheckError('no_viewer')
+      const url = pageUrl(ctx)
+      if (!url) throw new CheckError('not_supported')
       const browser = await launchAssistBrowser()
       try {
         const context = await browser.newContext({
@@ -134,7 +137,7 @@ export function givexFetcher(provider: string, pageUrl: () => string): BalanceFe
         })
         const page = await context.newPage()
         const started = Date.now()
-        const res = await page.goto(pageUrl(), { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => null)
+        const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => null)
         if (!res) throw new CheckError('blocked')
         if (res.status() >= 400) throw new CheckError('blocked')
         await page.waitForLoadState('load', { timeout: 20_000 }).catch(() => {})
@@ -153,4 +156,7 @@ export function givexFetcher(provider: string, pageUrl: () => string): BalanceFe
   }
 }
 
-export const sportchekFetcher = givexFetcher('sportchek', () => SPORTCHEK_BALANCE_PAGE)
+export const sportchekFetcher = assistedFetcher('sportchek', () => SPORTCHEK_BALANCE_PAGE)
+
+/** Any merchant: its balance page as saved in the app. */
+export const anyMerchantFetcher = assistedFetcher('assisted', (ctx) => ctx.pageUrl)

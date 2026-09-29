@@ -230,6 +230,13 @@ reach the server on port 8787, then `docker compose up -d --build`, and in the a
 number included). Each link works only for its own check, dies when the check ends, and
 never carries the card number or PIN itself. Still, keep it on your home network or Tailscale.
 
+**Any other merchant** can use the same assisted check: in **Settings → Merchants →
+(merchant)**, set its **Balance check page**, then **Automatic balance check → Assisted**.
+The worker opens that page, fills in the card number and PIN where it recognises the
+fields (otherwise use the Type buttons), hands it to you, and saves the balance once
+the page shows one ("Balance: $12.34"). If the merchant's bot protection refuses the
+worker's browser, the app says so right away; use **Check balance** instead.
+
 ### Adding another merchant
 
 Write a fetcher in `worker/src/fetchers/` (card number + PIN → cents, or throw a
