@@ -1,0 +1,41 @@
+# Local development stack (`supabase start`). Hosted projects are configured in the dashboard;
+# see README "Supabase setup" for the equivalent settings.
+project_id = "giftcard-wallet"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "http://localhost:4173"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+# Private app: nobody can sign themselves up. Members are invited.
+enable_signup = false
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = false
+otp_expiry = 3600
